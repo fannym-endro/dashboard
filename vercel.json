@@ -1,0 +1,7 @@
+{
+  "crons": [
+    { "path": "/api/sync/shopify", "schedule": "0 * * * *" },
+    { "path": "/api/sync/klaviyo", "schedule": "15 * * * *" },
+    { "path": "/api/sync/meta", "schedule": "0 */6 * * *" }
+  ]
+}
