@@ -10,15 +10,12 @@ export async function GET() {
     const token = await getShopifyToken();
     const SHOP = process.env.SHOPIFY_SHOP;
     const query = `query {
-      shopifyqlQuery(query: "FROM sales SHOW total_sales, orders TIMESERIES month SINCE 2025-01-01 UNTIL 2025-12-31") {
-        __typename
-        ... on TableResponse {
-          tableData {
-            columns { name displayName dataType }
-            rowData
-          }
+      shopifyqlQuery(query: "FROM sales SHOW total_sales, orders GROUP BY month SINCE 2025-01-01 UNTIL 2025-12-31") {
+        tableData {
+          columns { name displayName dataType }
+          rowData
         }
-        parseErrors { code message }
+        parseErrors
       }
     }`;
     const res = await fetch(`https://${SHOP}/admin/api/2025-10/graphql.json`, {
