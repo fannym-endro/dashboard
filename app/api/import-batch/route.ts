@@ -39,21 +39,24 @@ export async function GET(req: Request) {
     for (const d of dates) await ensureDate(d as string);
 
     if (nodes.length) {
-      const custRows: any[] = [];
-      const orderRows: any[] = [];
-      const lineRows: any[] = [];
+      const custMap = new Map<string, any[]>();
+      const orderMap = new Map<string, any[]>();
+      const lineMap = new Map<string, any[]>();
       for (const o of nodes) {
         const dateKey = o.createdAt.slice(0, 10);
         const custId = o.customer?.id ?? null;
-        if (custId) custRows.push([custId, o.customer?.numberOfOrders ?? 0]);
-        orderRows.push([o.id, o.name, custId, dateKey, o.createdAt,
+        if (custId) custMap.set(custId, [custId, o.customer?.numberOfOrders ?? 0]);
+        orderMap.set(o.id, [o.id, o.name, custId, dateKey, o.createdAt,
           num(o.currentSubtotalPriceSet), num(o.totalPriceSet), num(o.totalShippingPriceSet),
           num(o.totalDiscountsSet), (o.customer?.numberOfOrders ?? 1) <= 1]);
         for (const li of o.lineItems.nodes) {
           const unit = num(li.discountedUnitPriceSet);
-          lineRows.push([o.id, li.id, li.product?.id ?? null, li.sku, li.quantity, unit, +(unit * li.quantity).toFixed(2)]);
+          lineMap.set(`${o.id}|${li.id}`, [o.id, li.id, li.product?.id ?? null, li.sku, li.quantity, unit, +(unit * li.quantity).toFixed(2)]);
         }
       }
+      const custRows = [...custMap.values()];
+      const orderRows = [...orderMap.values()];
+      const lineRows = [...lineMap.values()];
 
       if (custRows.length) {
         const vals = custRows.map((_, i) => `($${i*2+1},$${i*2+2})`).join(",");
