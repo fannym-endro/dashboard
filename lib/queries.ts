@@ -70,7 +70,7 @@ export async function getEcommerce({ from, to }: Range) {
      FROM fct_order_lines l JOIN fct_orders o ON o.order_id=l.order_id
      LEFT JOIN dim_product p ON p.product_id=l.product_id
      WHERE o.date_key BETWEEN $1 AND $2
-     GROUP BY p.title,p.categorie ORDER BY ca_ht DESC LIMIT 10`,
+     GROUP BY p.title,p.categorie ORDER BY ca_ht DESC LIMIT 40`,
     [from, to]
   );
   const topByUnits = await q(
@@ -78,7 +78,7 @@ export async function getEcommerce({ from, to }: Range) {
      FROM fct_order_lines l JOIN fct_orders o ON o.order_id=l.order_id
      LEFT JOIN dim_product p ON p.product_id=l.product_id
      WHERE o.date_key BETWEEN $1 AND $2
-     GROUP BY p.title ORDER BY units DESC LIMIT 10`,
+     GROUP BY p.title ORDER BY units DESC LIMIT 40`,
     [from, to]
   );
   const byCategory = await q(

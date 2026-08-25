@@ -1,9 +1,23 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Component } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   BarChart, Bar, Cell,
 } from "recharts";
+
+// Barrière d'erreur : si un onglet plante, on montre un message au lieu d'une page blanche.
+class ErrorBoundary extends Component<{ children: any }, { hasError: boolean }> {
+  constructor(props: any) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidUpdate(prev: any) { if (prev.children !== this.props.children && this.state.hasError) this.setState({ hasError: false }); }
+  render() {
+    if (this.state.hasError)
+      return <div style={{ background: "#fff", border: "1px solid #e6e3dd", borderRadius: 12, padding: 40, textAlign: "center", color: "#7a7770" }}>
+        Cet onglet n'a pas pu s'afficher (données incomplètes). Essaie une autre période ou lance une synchronisation.
+      </div>;
+    return this.props.children;
+  }
+}
 
 const BRAND = "#142e1f";
 const BRAND_LIGHT = "#2d5741";
@@ -88,12 +102,12 @@ export default function Dashboard() {
         {loading && <Info>Chargement…</Info>}
         {error && <Info>Aucune donnée pour le moment. Lance une synchronisation pour remplir le dashboard.<br /><span style={{ fontSize: 12, opacity: 0.6 }}>({error})</span></Info>}
         {!loading && !error && data && (
-          <>
+          <ErrorBoundary>
             {tab === "overview" && <Overview data={data} />}
             {tab === "ecommerce" && <Ecommerce data={data} />}
             {tab === "meta" && <Meta data={data} />}
             {tab === "klaviyo" && <Klaviyo data={data} />}
-          </>
+          </ErrorBoundary>
         )}
       </main>
       <footer style={{ textAlign: "center", padding: 24, color: "#a8a49c", fontSize: 12 }}>
@@ -151,7 +165,7 @@ function grid(cols: number) {
 
 // ---------------- OVERVIEW ----------------
 function Overview({ data }: any) {
-  const k = data.kpis;
+  const k = data?.kpis ?? {};
   const series = (data.series ?? []).map((d: any) => ({
     date: new Date(d.date_key).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
     ca: Number(d.ca_ht), meta: Number(d.meta_ca),
@@ -188,7 +202,7 @@ function Overview({ data }: any) {
 
 // ---------------- E-COMMERCE ----------------
 function Ecommerce({ data }: any) {
-  const c = data.clients ?? {};
+  const c = data?.clients ?? {};
   return (
     <>
       <div style={grid(4)}>
@@ -198,24 +212,24 @@ function Ecommerce({ data }: any) {
         <Kpi label="Remises accordées" value={eur(c.discounts)} />
       </div>
 
-      <SectionTitle>Top 10 produits par CA</SectionTitle>
-      <Card><Table rows={data.topByCa} cols={[
+      <SectionTitle>Top 40 produits par CA</SectionTitle>
+      <Card><Table rows={data?.topByCa ?? []} cols={[
         ["title", "Produit"], ["categorie", "Catégorie"], ["ca_ht", "CA HT", eur], ["units", "Unités", num],
       ]} /></Card>
 
-      <SectionTitle>Top 10 produits par unités</SectionTitle>
-      <Card><Table rows={data.topByUnits} cols={[
+      <SectionTitle>Top 40 produits par unités</SectionTitle>
+      <Card><Table rows={data?.topByUnits ?? []} cols={[
         ["title", "Produit"], ["units", "Unités", num], ["ca_ht", "CA HT", eur],
       ]} /></Card>
 
       <div style={{ ...grid(2), marginTop: 8 }}>
         <div>
           <SectionTitle>CA par catégorie</SectionTitle>
-          <Card><Table rows={data.byCategory} cols={[["categorie", "Catégorie"], ["ca_ht", "CA HT", eur]]} /></Card>
+          <Card><Table rows={data?.byCategory ?? []} cols={[["categorie", "Catégorie"], ["ca_ht", "CA HT", eur]]} /></Card>
         </div>
         <div>
           <SectionTitle>CA par source (attribution)</SectionTitle>
-          <Card><Table rows={data.bySource} cols={[
+          <Card><Table rows={data?.bySource ?? []} cols={[
             ["source", "Source"], ["orders", "Cmd", num], ["ca_ht", "CA HT", eur], ["aov", "AOV", (v:any)=>eur(v,0)],
           ]} /></Card>
         </div>
@@ -229,7 +243,7 @@ function Ecommerce({ data }: any) {
 
 // ---------------- META ----------------
 function Meta({ data }: any) {
-  const t = data.totals;
+  const t = data?.totals ?? {};
   return (
     <>
       <div style={grid(4)}>
@@ -244,21 +258,21 @@ function Meta({ data }: any) {
       </div>
 
       <SectionTitle>Par campagne</SectionTitle>
-      <Card><Table rows={data.byCampaign} cols={[
+      <Card><Table rows={data?.byCampaign ?? []} cols={[
         ["campaign_name", "Campagne"],
         ["spend", "Dépense", eur],
         ["pv", "CA attr.", eur],
-        ["__roas", "ROAS", null, (r:any)=> r.spend>0 ? (r.pv/r.spend).toFixed(2) : "—"],
+        ["__roas", "ROAS", null, (r:any)=> Number(r.spend)>0 ? (Number(r.pv)/Number(r.spend)).toFixed(2) : "—"],
         ["purchases", "Conv.", num],
       ]} /></Card>
 
       <SectionTitle>Par publicité</SectionTitle>
-      <Card><Table rows={data.byAd} cols={[
+      <Card><Table rows={data?.byAd ?? []} cols={[
         ["ad_name", "Publicité"],
         ["campaign_name", "Campagne"],
         ["spend", "Dépense", eur],
-        ["__roas", "ROAS", null, (r:any)=> r.spend>0 ? (r.pv/r.spend).toFixed(2) : "—"],
-        ["__ctr", "CTR", null, (r:any)=> r.impressions>0 ? (100*r.clicks/r.impressions).toFixed(2)+" %" : "—"],
+        ["__roas", "ROAS", null, (r:any)=> Number(r.spend)>0 ? (Number(r.pv)/Number(r.spend)).toFixed(2) : "—"],
+        ["__ctr", "CTR", null, (r:any)=> Number(r.impressions)>0 ? (100*Number(r.clicks)/Number(r.impressions)).toFixed(2)+" %" : "—"],
       ]} /></Card>
     </>
   );
@@ -266,7 +280,7 @@ function Meta({ data }: any) {
 
 // ---------------- KLAVIYO ----------------
 function Klaviyo({ data }: any) {
-  const t = data.totals;
+  const t = data?.totals ?? {};
   return (
     <>
       <div style={grid(4)}>
@@ -280,12 +294,12 @@ function Klaviyo({ data }: any) {
       </div>
 
       <SectionTitle>Performance par flow</SectionTitle>
-      <Card><Table rows={data.byFlow} cols={[
+      <Card><Table rows={data?.byFlow ?? []} cols={[
         ["flow_name", "Flow"], ["orders", "Commandes", num], ["rev", "CA attr.", eur],
       ]} /></Card>
 
       <SectionTitle>Détail par évènement</SectionTitle>
-      <Card><Table rows={data.byMetric} cols={[
+      <Card><Table rows={data?.byMetric ?? []} cols={[
         ["metric", "Évènement"], ["n", "Volume", num], ["rev", "CA", eur],
       ]} /></Card>
       <p style={{ fontSize: 12, color: "#b8b4ac", marginTop: 16, fontStyle: "italic" }}>
@@ -314,11 +328,16 @@ function Table({ rows, cols }: { rows: any[]; cols: any[] }) {
           <tr key={ri} style={{ borderBottom: "1px solid #f0ede7" }}>
             {cols.map((col, ci) => {
               const [key, , fmt, compute] = col;
-              let val = compute ? compute(r) : r[key];
-              if (fmt && !compute) val = fmt(val);
+              let val: any;
+              try {
+                val = compute ? compute(r) : r[key];
+                if (fmt && !compute) val = fmt(val);
+              } catch { val = "—"; }
+              if (val == null || (typeof val === "number" && isNaN(val))) val = "—";
+              if (typeof val === "object") val = String(val);
               return (
                 <td key={ci} style={{ textAlign: ci === 0 ? "left" : "right", padding: "8px 6px", color: ci === 0 ? "#1a1a1a" : "#4a4740" }}>
-                  {val ?? "—"}
+                  {val}
                 </td>
               );
             })}
