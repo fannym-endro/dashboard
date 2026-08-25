@@ -212,12 +212,12 @@ function Ecommerce({ data }: any) {
         <Kpi label="Remises accordées" value={eur(c.discounts)} />
       </div>
 
-      <SectionTitle>Top 10 produits par CA</SectionTitle>
+      <SectionTitle>Top 40 produits par CA</SectionTitle>
       <Card><Table rows={data.topByCa} cols={[
         ["title", "Produit"], ["categorie", "Catégorie"], ["ca_ht", "CA HT", eur], ["units", "Unités", num],
       ]} /></Card>
 
-      <SectionTitle>Top 10 produits par unités</SectionTitle>
+      <SectionTitle>Top 40 produits par unités</SectionTitle>
       <Card><Table rows={data.topByUnits} cols={[
         ["title", "Produit"], ["units", "Unités", num], ["ca_ht", "CA HT", eur],
       ]} /></Card>
