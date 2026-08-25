@@ -57,7 +57,7 @@ export async function GET(req: Request) {
   // Fenêtre : depuis le dernier order ingéré, sinon 30j de rattrapage.
   const [{ last }] = (
     await pool.query(
-      `SELECT COALESCE(MAX(created_at), now() - interval '30 days') AS last FROM fct_orders`
+      `SELECT COALESCE(MAX(created_at), now() - interval '365 days') AS last FROM fct_orders`
     )
   ).rows;
   const since = new Date(last).toISOString().slice(0, 10);
@@ -66,6 +66,7 @@ export async function GET(req: Request) {
   let cursor: string | null = null;
   let processed = 0;
 
+  try {
   do {
     const data = await shopifyGraphQL(ORDERS_QUERY, { cursor, q });
     const { nodes, pageInfo } = data.orders;
@@ -143,6 +144,12 @@ export async function GET(req: Request) {
 
     cursor = pageInfo.hasNextPage ? pageInfo.endCursor : null;
   } while (cursor);
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, processed, error: String(e?.message ?? e) },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({ ok: true, processed });
 }

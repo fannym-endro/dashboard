@@ -1,13 +1,17 @@
 import { Pool } from "pg";
 
 // Pool unique réutilisé entre invocations (Vercel garde le module chaud).
-// DATABASE_URL = ta connexion Postgres (Neon/Supabase/Vercel Postgres).
+// On retire un éventuel sslmode= de l'URL et on impose le SSL nous-mêmes,
+// ce qui évite l'avertissement "SECURITY WARNING: SSL modes..." et fiabilise Neon.
 const globalForPg = globalThis as unknown as { pgPool?: Pool };
+
+const rawUrl = process.env.DATABASE_URL ?? "";
+const cleanUrl = rawUrl.replace(/([?&])sslmode=[^&]*/i, "").replace(/[?&]$/, "");
 
 export const pool =
   globalForPg.pgPool ??
   new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: cleanUrl,
     max: 5,
     ssl: { rejectUnauthorized: false },
   });
