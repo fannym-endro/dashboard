@@ -9,22 +9,13 @@ export async function GET() {
   try {
     const token = await getShopifyToken();
     const SHOP = process.env.SHOPIFY_SHOP;
-    const query = `query {
-      shopifyqlQuery(query: "FROM sales SHOW total_sales, orders GROUP BY month SINCE 2025-01-01 UNTIL 2025-12-31") {
-        tableData {
-          columns { name displayName dataType }
-          rowData
-        }
-        parseErrors
-      }
-    }`;
-    const res = await fetch(`https://${SHOP}/admin/api/2025-10/graphql.json`, {
+    const introspect = `query { __type(name: "ShopifyqlTableData") { fields { name type { name kind ofType { name kind } } } } }`;
+    const r1 = await fetch(`https://${SHOP}/admin/api/2025-10/graphql.json`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query: introspect }),
     });
-    out.http = res.status;
-    out.reponse = await res.json();
+    out.champs_disponibles = await r1.json();
   } catch (e: any) {
     out.erreur = String(e?.message ?? e);
   }
