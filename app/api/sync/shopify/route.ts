@@ -20,7 +20,6 @@ query($cursor: String, $q: String!) {
       totalPriceSet { shopMoney { amount } }
       totalShippingPriceSet { shopMoney { amount } }
       totalDiscountsSet { shopMoney { amount } }
-      customerJourneySummary { firstVisit { utmParameters { source medium } landingPage } }
       lineItems(first: 50) {
         nodes {
           id sku quantity
@@ -65,6 +64,7 @@ export async function GET(req: Request) {
 
   let cursor: string | null = null;
   let processed = 0;
+  let skipped = 0;
 
   try {
   do {
@@ -72,6 +72,7 @@ export async function GET(req: Request) {
     const { nodes, pageInfo } = data.orders;
 
     for (const o of nodes) {
+     try {
       const createdAt = o.createdAt;
       const dateKey = createdAt.slice(0, 10);
       await ensureDate(dateKey);
@@ -97,7 +98,6 @@ export async function GET(req: Request) {
         );
       }
 
-      const journey = o.customerJourneySummary?.firstVisit;
       const isNew = (o.customer?.numberOfOrders ?? 1) <= 1;
 
       // fct_orders
@@ -114,9 +114,9 @@ export async function GET(req: Request) {
           shipping_ht: num(o.totalShippingPriceSet),
           discount_ht: num(o.totalDiscountsSet),
           is_new_customer: isNew,
-          utm_source: journey?.utmParameters?.source ?? null,
-          utm_medium: journey?.utmParameters?.medium ?? null,
-          landing_ref: journey?.landingPage ?? null,
+          utm_source: null,
+          utm_medium: null,
+          landing_ref: null,
         },
         ["order_id"]
       );
@@ -140,6 +140,10 @@ export async function GET(req: Request) {
         );
       }
       processed++;
+     } catch (err) {
+       // Une commande qui pose problème est ignorée, on continue les autres.
+       skipped++;
+     }
     }
 
     cursor = pageInfo.hasNextPage ? pageInfo.endCursor : null;
@@ -151,7 +155,7 @@ export async function GET(req: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, processed });
+  return NextResponse.json({ ok: true, processed, skipped });
 }
 
 function num(set: any): number {
