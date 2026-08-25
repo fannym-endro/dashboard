@@ -12,6 +12,35 @@ export function assertCron(req: Request) {
   }
 }
 
+// --- Authentification Shopify (Dev Dashboard, client credentials grant) ---
+// Depuis 2026, Shopify ne fournit plus de jeton fixe. On l'obtient en échangeant
+// CLIENT_ID + CLIENT_SECRET contre un access_token valable 24h, mis en cache ici.
+let shopifyToken: string | null = null;
+let shopifyTokenExpiresAt = 0;
+
+export async function getShopifyToken(): Promise<string> {
+  if (shopifyToken && Date.now() < shopifyTokenExpiresAt - 60_000) {
+    return shopifyToken;
+  }
+  const shop = process.env.SHOPIFY_SHOP!; // ex: endro-cosmetiques.myshopify.com
+  const res = await fetch(`https://${shop}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: process.env.SHOPIFY_CLIENT_ID!,
+      client_secret: process.env.SHOPIFY_CLIENT_SECRET!,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Shopify token request failed: ${res.status} ${await res.text()}`);
+  }
+  const { access_token, expires_in } = await res.json();
+  shopifyToken = access_token;
+  shopifyTokenExpiresAt = Date.now() + expires_in * 1000;
+  return shopifyToken!;
+}
+
 export function hashEmail(email?: string | null): string | null {
   if (!email) return null;
   return crypto.createHash("sha256").update(email.trim().toLowerCase()).digest("hex");

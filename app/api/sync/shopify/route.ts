@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { pool, upsert } from "@/lib/db";
-import { assertCron, hashEmail, ensureDate } from "@/lib/sync-utils";
+import { assertCron, hashEmail, ensureDate, getShopifyToken } from "@/lib/sync-utils";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // Vercel : laisse le temps à la pagination
 
-const SHOP = process.env.SHOPIFY_SHOP;           // ex: endro.myshopify.com
-const TOKEN = process.env.SHOPIFY_ADMIN_TOKEN;   // Admin API access token
+const SHOP = process.env.SHOPIFY_SHOP;           // ex: endro-cosmetiques.myshopify.com
 const API = "2025-01";
 
 // Incrémental : on récupère les commandes mises à jour depuis le dernier sync.
@@ -34,11 +33,12 @@ query($cursor: String, $q: String!) {
 }`;
 
 async function shopifyGraphQL(query: string, variables: any) {
+  const token = await getShopifyToken(); // jeton obtenu/renouvelé automatiquement
   const res = await fetch(`https://${SHOP}/admin/api/${API}/graphql.json`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Shopify-Access-Token": TOKEN!,
+      "X-Shopify-Access-Token": token,
     },
     body: JSON.stringify({ query, variables }),
   });
