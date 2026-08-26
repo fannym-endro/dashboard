@@ -38,6 +38,7 @@ const TABS = [
 ];
 
 const PRESETS = [
+  { label: "Hier", days: 1, offset: 1 },
   { label: "7 j", days: 7 },
   { label: "30 j", days: 30 },
   { label: "90 j", days: 90 },
@@ -63,9 +64,10 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, [tab, from, to]);
 
-  function setPreset(days: number) {
-    setTo(iso(new Date()));
-    setFrom(iso(new Date(Date.now() - (days - 1) * 864e5)));
+  function setPreset(days: number, offset = 0) {
+    const end = new Date(Date.now() - offset * 864e5);
+    setTo(iso(end));
+    setFrom(iso(new Date(end.getTime() - (days - 1) * 864e5)));
   }
 
   return (
@@ -121,7 +123,7 @@ function DateBar({ from, to, setFrom, setTo, setPreset }: any) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
       {PRESETS.map((p) => (
-        <button key={p.label} onClick={() => setPreset(p.days)}
+        <button key={p.label} onClick={() => setPreset(p.days, (p as any).offset ?? 0)}
           style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.3)",
             background: "rgba(255,255,255,0.1)", color: "#fff", cursor: "pointer", fontSize: 13 }}>
           {p.label}
@@ -144,12 +146,24 @@ function Card({ children, span = 1 }: any) {
   return <div style={{ background: "#fff", border: "1px solid #e6e3dd", borderRadius: 12, padding: 20, gridColumn: `span ${span}` }}>{children}</div>;
 }
 
-function Kpi({ label, value, sub, hint }: any) {
+function Delta({ v, label }: { v: number | null; label: string }) {
+  if (v == null) return <span style={{ color: "#c4c0b8" }}>{label} —</span>;
+  const up = v >= 0;
+  return <span style={{ color: up ? "#2e7d52" : "#c0392b" }}>{label} {up ? "▲" : "▼"} {Math.abs(v)}%</span>;
+}
+
+function Kpi({ label, value, sub, hint, cmp }: any) {
   return (
     <Card>
       <div style={{ fontSize: 11, color: "#9a968e", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 700, color: BRAND, marginTop: 6 }}>{value}</div>
       {sub && <div style={{ fontSize: 13, color: "#7a7770", marginTop: 4 }}>{sub}</div>}
+      {cmp && (
+        <div style={{ fontSize: 11, marginTop: 8, display: "flex", flexDirection: "column", gap: 2 }}>
+          <Delta v={cmp.vs_prev} label="vs préc." />
+          <Delta v={cmp.vs_yoy} label="vs N-1" />
+        </div>
+      )}
       {hint && <div style={{ fontSize: 11, color: "#b8b4ac", marginTop: 6, fontStyle: "italic" }}>{hint}</div>}
     </Card>
   );
@@ -173,11 +187,11 @@ function Overview({ data }: any) {
   return (
     <>
       <div style={grid(4)}>
-        <Kpi label="CA" value={eur(k.ca_ht)} />
-        <Kpi label="Commandes" value={num(k.orders)} />
-        <Kpi label="AOV" value={eur(k.aov_ht, 2)} />
-        <Kpi label="Sessions" value={num(k.sessions)} />
-        <Kpi label="Taux conversion" value={k.cvr != null ? k.cvr + " %" : "—"} />
+        <Kpi label="CA" value={eur(k.ca_ht)} cmp={k.cmp?.ca} />
+        <Kpi label="Commandes" value={num(k.orders)} cmp={k.cmp?.orders} />
+        <Kpi label="AOV" value={eur(k.aov_ht, 2)} cmp={k.cmp?.aov} />
+        <Kpi label="Sessions" value={num(k.sessions)} cmp={k.cmp?.sessions} />
+        <Kpi label="Taux conversion" value={k.cvr != null ? k.cvr + " %" : "—"} cmp={k.cmp?.cvr} />
         <Kpi label="ROAS Meta" value={k.meta_roas ?? "—"} />
         <Kpi label="Dépenses Meta" value={eur(k.meta_spend)} />
         <Kpi label="CA attribué Meta" value={eur(k.meta_attributed_ca)} />
@@ -302,41 +316,76 @@ function Klaviyo({ data }: any) {
   );
 }
 
-// ---------------- TABLE générique ----------------
+// ---------------- TABLE générique (triable + filtrable) ----------------
 function Table({ rows, cols }: { rows: any[]; cols: any[] }) {
-  if (!rows || rows.length === 0) return <div style={{ color: "#9a968e", fontSize: 14 }}>Aucune donnée sur la période.</div>;
+  const [sortKey, setSortKey] = useState<number | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [filter, setFilter] = useState("");
+
+  if (!rows || rows.length === 0)
+    return <div style={{ color: "#9a968e", fontSize: 14 }}>Aucune donnée sur la période.</div>;
+
+  // valeur brute d'une cellule pour le tri
+  const rawVal = (r: any, col: any) => {
+    const [key, , , compute] = col;
+    let v = compute ? compute(r) : r[key];
+    const n = parseFloat(String(v).replace(/[^\d.-]/g, ""));
+    return isNaN(n) ? String(v ?? "") : n;
+  };
+
+  let view = [...rows];
+  if (filter.trim()) {
+    const f = filter.toLowerCase();
+    view = view.filter((r) => String(r[cols[0][0]] ?? "").toLowerCase().includes(f));
+  }
+  if (sortKey != null) {
+    const col = cols[sortKey];
+    view.sort((a, b) => {
+      const va = rawVal(a, col), vb = rawVal(b, col);
+      if (typeof va === "number" && typeof vb === "number") return sortDir === "asc" ? va - vb : vb - va;
+      return sortDir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+  }
+
+  function clickHeader(i: number) {
+    if (sortKey === i) setSortDir(sortDir === "asc" ? "desc" : "asc");
+    else { setSortKey(i); setSortDir("desc"); }
+  }
+
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-      <thead>
-        <tr style={{ borderBottom: `2px solid ${BRAND}` }}>
-          {cols.map((col, i) => (
-            <th key={i} style={{ textAlign: i === 0 ? "left" : "right", padding: "8px 6px", color: BRAND, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.3 }}>
-              {col[1]}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r, ri) => (
-          <tr key={ri} style={{ borderBottom: "1px solid #f0ede7" }}>
-            {cols.map((col, ci) => {
-              const [key, , fmt, compute] = col;
-              let val: any;
-              try {
-                val = compute ? compute(r) : r[key];
-                if (fmt && !compute) val = fmt(val);
-              } catch { val = "—"; }
-              if (val == null || (typeof val === "number" && isNaN(val))) val = "—";
-              if (typeof val === "object") val = String(val);
-              return (
-                <td key={ci} style={{ textAlign: ci === 0 ? "left" : "right", padding: "8px 6px", color: ci === 0 ? "#1a1a1a" : "#4a4740" }}>
-                  {val}
-                </td>
-              );
-            })}
+    <div>
+      <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={`Filtrer ${cols[0][1].toLowerCase()}…`}
+        style={{ marginBottom: 10, padding: "6px 10px", borderRadius: 6, border: "1px solid #e6e3dd", fontSize: 13, width: 260 }} />
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+        <thead>
+          <tr style={{ borderBottom: `2px solid ${BRAND}` }}>
+            {cols.map((col: any, i: number) => (
+              <th key={i} onClick={() => clickHeader(i)}
+                style={{ textAlign: i === 0 ? "left" : "right", padding: "8px 6px", color: BRAND, fontSize: 12,
+                  textTransform: "uppercase", letterSpacing: 0.3, cursor: "pointer", userSelect: "none" }}>
+                {col[1]}{sortKey === i ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {view.map((r: any, ri: number) => (
+            <tr key={ri} style={{ borderBottom: "1px solid #f0ede7" }}>
+              {cols.map((col: any, ci: number) => {
+                const [key, , fmt, compute] = col;
+                let val: any;
+                try { val = compute ? compute(r) : r[key]; if (fmt && !compute) val = fmt(val); }
+                catch { val = "—"; }
+                if (val == null || (typeof val === "number" && isNaN(val))) val = "—";
+                if (typeof val === "object") val = String(val);
+                return (
+                  <td key={ci} style={{ textAlign: ci === 0 ? "left" : "right", padding: "8px 6px", color: ci === 0 ? "#1a1a1a" : "#4a4740" }}>{val}</td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

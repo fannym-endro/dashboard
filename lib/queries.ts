@@ -2,29 +2,61 @@ import { q } from "./db";
 
 type Range = { from: string; to: string };
 
-// ---------- VUE D'ENSEMBLE (agrégats) ----------
-export async function getOverview({ from, to }: Range) {
+// Décale une plage de N jours (négatif = vers le passé)
+function shift(from: string, to: string, days: number): Range {
+  const f = new Date(from + "T00:00:00Z"); f.setUTCDate(f.getUTCDate() + days);
+  const t = new Date(to + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + days);
+  return { from: f.toISOString().slice(0, 10), to: t.toISOString().slice(0, 10) };
+}
+function daysBetween(from: string, to: string) {
+  return Math.round((+new Date(to) - +new Date(from)) / 864e5) + 1;
+}
+function variation(cur: number, prev: number): number | null {
+  if (!prev) return null;
+  return +(((cur - prev) / prev) * 100).toFixed(1);
+}
+
+async function overviewRaw({ from, to }: Range) {
   const [row] = await q(
     `SELECT COALESCE(SUM(total_sales),0) ca, COALESCE(SUM(orders),0) orders,
             COALESCE(SUM(sessions),0) sessions,
             CASE WHEN SUM(orders)>0 THEN SUM(total_sales)/SUM(orders) END aov,
             CASE WHEN SUM(sessions)>0 THEN 100.0*SUM(orders)/SUM(sessions) END cvr
      FROM agg_daily WHERE date_key BETWEEN $1 AND $2`, [from, to]);
-  const [meta] = await q(
-    `SELECT COALESCE(SUM(spend),0) spend, COALESCE(SUM(purchase_value),0) pv
-     FROM fct_ad_spend WHERE date_key BETWEEN $1 AND $2`, [from, to]);
-  const [klav] = await q(
-    `SELECT COALESCE(SUM(revenue_ht),0) rev FROM fct_email_events
-     WHERE metric='Placed Order' AND date_key BETWEEN $1 AND $2`, [from, to]);
-  const ca = Number(row.ca), spend = Number(meta.spend);
   return {
-    ca_ht: ca, orders: Number(row.orders), sessions: Number(row.sessions),
-    aov_ht: row.aov ? Number(row.aov) : null,
-    cvr: row.cvr ? +Number(row.cvr).toFixed(2) : null,
-    meta_spend: spend, meta_attributed_ca: Number(meta.pv),
-    meta_roas: spend > 0 ? +(Number(meta.pv)/spend).toFixed(2) : null,
-    klaviyo_ca: Number(klav.rev),
-    mer: spend > 0 ? +(ca/spend).toFixed(2) : null,
+    ca: Number(row.ca), orders: Number(row.orders), sessions: Number(row.sessions),
+    aov: row.aov ? Number(row.aov) : 0, cvr: row.cvr ? Number(row.cvr) : 0,
+  };
+}
+
+// ---------- VUE D'ENSEMBLE (agrégats + comparaisons) ----------
+export async function getOverview({ from, to }: Range) {
+  const n = daysBetween(from, to);
+  const prevR = shift(from, to, -n);        // période juste avant, même durée
+  const yoyR = shift(from, to, -365);       // même période l'an dernier
+
+  const [cur, prev, yoy, meta, klav] = await Promise.all([
+    overviewRaw({ from, to }),
+    overviewRaw(prevR),
+    overviewRaw(yoyR),
+    q(`SELECT COALESCE(SUM(spend),0) spend, COALESCE(SUM(purchase_value),0) pv
+       FROM fct_ad_spend WHERE date_key BETWEEN $1 AND $2`, [from, to]),
+    q(`SELECT COALESCE(SUM(revenue_ht),0) rev FROM fct_email_events
+       WHERE metric='Placed Order' AND date_key BETWEEN $1 AND $2`, [from, to]),
+  ]);
+  const spend = Number(meta[0].spend);
+  const cmp = (k: keyof typeof cur) => ({
+    vs_prev: variation(cur[k], prev[k]),
+    vs_yoy: variation(cur[k], yoy[k]),
+  });
+  return {
+    ca_ht: cur.ca, orders: cur.orders, sessions: cur.sessions,
+    aov_ht: cur.aov || null, cvr: cur.cvr ? +cur.cvr.toFixed(2) : null,
+    meta_spend: spend, meta_attributed_ca: Number(meta[0].pv),
+    meta_roas: spend > 0 ? +(Number(meta[0].pv)/spend).toFixed(2) : null,
+    klaviyo_ca: Number(klav[0].rev),
+    mer: spend > 0 ? +(cur.ca/spend).toFixed(2) : null,
+    cmp: { ca: cmp("ca"), orders: cmp("orders"), sessions: cmp("sessions"), aov: cmp("aov"), cvr: cmp("cvr") },
   };
 }
 
