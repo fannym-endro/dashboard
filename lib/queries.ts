@@ -88,11 +88,11 @@ export async function getEcommerce({ from, to }: Range) {
   const topByCa = await q(
     `SELECT product_title title, SUM(net_sales) ca_ht, SUM(units) units
      FROM agg_product_day WHERE date_key BETWEEN $1 AND $2
-     GROUP BY product_title ORDER BY ca_ht DESC LIMIT 40`, [from, to]);
+     GROUP BY product_title ORDER BY ca_ht DESC LIMIT 100`, [from, to]);
   const topByUnits = await q(
     `SELECT product_title title, SUM(units) units, SUM(net_sales) ca_ht
      FROM agg_product_day WHERE date_key BETWEEN $1 AND $2
-     GROUP BY product_title ORDER BY units DESC LIMIT 40`, [from, to]);
+     GROUP BY product_title ORDER BY units DESC LIMIT 100`, [from, to]);
   const byCategory = await q(
     `SELECT product_type categorie, SUM(net_sales) ca_ht
      FROM agg_category_day WHERE date_key BETWEEN $1 AND $2
