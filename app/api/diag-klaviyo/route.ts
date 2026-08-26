@@ -9,25 +9,18 @@ const h = () => ({ Authorization: `Klaviyo-API-Key ${KEY}`, accept: "application
 export async function GET() {
   const out: any = {};
   try {
-    const mres = await fetch("https://a.klaviyo.com/api/metrics/", { headers: h() });
-    const mj = await mres.json();
-    const all = (mj.data ?? []).map((m: any) => ({ id: m.id, name: m.attributes?.name, integration: m.attributes?.integration?.name }));
-
-    const test = async (id: string) => {
-      const body = { data: { type: "metric-aggregate", attributes: {
-        metric_id: id, measurements: ["count"], interval: "day",
-        filter: ["greater-or-equal(datetime,2025-11-01T00:00:00Z)", "less-than(datetime,2025-11-08T00:00:00Z)"],
-        timezone: "Europe/Paris" } } };
-      const res = await fetch("https://a.klaviyo.com/api/metric-aggregates/", { method: "POST", headers: h(), body: JSON.stringify(body) });
-      const j = await res.json();
-      const counts = j.data?.attributes?.data?.[0]?.measurements?.count ?? [];
-      return counts.reduce((a: number, b: number) => a + b, 0);
-    };
-    const results: any = {};
-    for (const m of all) {
-      try { const tot = await test(m.id); if (tot > 0) results[m.name] = tot; } catch {}
+    const all: any[] = [];
+    let url: string | null = "https://a.klaviyo.com/api/metrics/";
+    let pages = 0;
+    while (url && pages < 20) {
+      const res: any = await fetch(url, { headers: h() });
+      const j: any = await res.json();
+      for (const m of (j.data ?? [])) all.push({ id: m.id, name: m.attributes?.name });
+      url = j.links?.next ?? null;
+      pages++;
     }
-    out.metriques_avec_donnees = results;
+    out.total_metriques = all.length;
+    out.emailish = all.filter((m: any) => /order|email|placed|open|click|receive|sent|deliver/i.test(m.name || ""));
   } catch (e: any) { out.error = String(e?.message ?? e); }
   return NextResponse.json(out);
 }
