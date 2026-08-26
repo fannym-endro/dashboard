@@ -11,28 +11,23 @@ export async function GET() {
   try {
     const mres = await fetch("https://a.klaviyo.com/api/metrics/", { headers: h() });
     const mj = await mres.json();
-    const find = (name: string) => (mj.data ?? []).find((m: any) => m.attributes?.name === name)?.id ?? null;
-    const ids = {
-      placed: find("Placed Order"),
-      opened: find("Opened Email"),
-      clicked: find("Clicked Email"),
-      received: find("Received Email"),
-    };
-    out.ids = ids;
+    const all = (mj.data ?? []).map((m: any) => ({ id: m.id, name: m.attributes?.name, integration: m.attributes?.integration?.name }));
 
-    if (ids.placed) {
-      const body = {
-        data: { type: "metric-aggregate", attributes: {
-          metric_id: ids.placed,
-          measurements: ["count", "sum_value"],
-          interval: "day",
-          filter: ["greater-or-equal(datetime,2025-11-01T00:00:00Z)", "less-than(datetime,2025-11-08T00:00:00Z)"],
-          timezone: "Europe/Paris",
-        } }
-      };
-      const ares = await fetch("https://a.klaviyo.com/api/metric-aggregates/", { method: "POST", headers: h(), body: JSON.stringify(body) });
-      out.aggregate = await ares.json();
+    const test = async (id: string) => {
+      const body = { data: { type: "metric-aggregate", attributes: {
+        metric_id: id, measurements: ["count"], interval: "day",
+        filter: ["greater-or-equal(datetime,2025-11-01T00:00:00Z)", "less-than(datetime,2025-11-08T00:00:00Z)"],
+        timezone: "Europe/Paris" } } };
+      const res = await fetch("https://a.klaviyo.com/api/metric-aggregates/", { method: "POST", headers: h(), body: JSON.stringify(body) });
+      const j = await res.json();
+      const counts = j.data?.attributes?.data?.[0]?.measurements?.count ?? [];
+      return counts.reduce((a: number, b: number) => a + b, 0);
+    };
+    const results: any = {};
+    for (const m of all) {
+      try { const tot = await test(m.id); if (tot > 0) results[m.name] = tot; } catch {}
     }
+    out.metriques_avec_donnees = results;
   } catch (e: any) { out.error = String(e?.message ?? e); }
   return NextResponse.json(out);
 }
