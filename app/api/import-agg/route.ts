@@ -58,33 +58,36 @@ export async function GET(req: Request) {
     }
 
     // 3. Produits par mois
-    const prod = await ql(`FROM sales SHOW net_sales, net_items_sold GROUP BY product_title, month SINCE ${from} UNTIL ${to}`);
+    const prod = await ql(`FROM sales SHOW net_sales, net_items_sold GROUP BY product_title, day SINCE ${from} UNTIL ${to}`);
     if (prod.length) {
-      const pr = prod.filter((r: any) => r.product_title).map((r: any) => [r.month, r.product_title, num(r.net_sales), int(r.net_items_sold)]);
-      if (pr.length) {
-        const pv = pr.map((_: any, i: number) => { const b=i*4; return `($${b+1},$${b+2},$${b+3},$${b+4})`; }).join(",");
+      const pr = prod.filter((r: any) => r.product_title).map((r: any) => [r.day, r.product_title, num(r.net_sales), int(r.net_items_sold)]);
+      // insertion par paquets de 500 pour éviter des requêtes trop grosses
+      for (let i=0; i<pr.length; i+=500) {
+        const chunk = pr.slice(i, i+500);
+        const pv = chunk.map((_: any, k: number) => { const b=k*4; return `($${b+1},$${b+2},$${b+3},$${b+4})`; }).join(",");
         await pool.query(
-          `INSERT INTO agg_product_month (month_key,product_title,net_sales,units) VALUES ${pv}
-           ON CONFLICT (month_key,product_title) DO UPDATE SET net_sales=EXCLUDED.net_sales, units=EXCLUDED.units`,
-          pr.flat()
+          `INSERT INTO agg_product_day (date_key,product_title,net_sales,units) VALUES ${pv}
+           ON CONFLICT (date_key,product_title) DO UPDATE SET net_sales=EXCLUDED.net_sales, units=EXCLUDED.units`,
+          chunk.flat()
         );
-        out.lignes_produits = pr.length;
       }
+      out.lignes_produits = pr.length;
     }
 
     // 4. Catégories par mois
-    const cat = await ql(`FROM sales SHOW net_sales GROUP BY product_type, month SINCE ${from} UNTIL ${to}`);
+    const cat = await ql(`FROM sales SHOW net_sales GROUP BY product_type, day SINCE ${from} UNTIL ${to}`);
     if (cat.length) {
-      const cr = cat.filter((r: any) => r.product_type).map((r: any) => [r.month, r.product_type, num(r.net_sales)]);
-      if (cr.length) {
-        const cv = cr.map((_: any, i: number) => { const b=i*3; return `($${b+1},$${b+2},$${b+3})`; }).join(",");
+      const cr = cat.filter((r: any) => r.product_type).map((r: any) => [r.day, r.product_type, num(r.net_sales)]);
+      for (let i=0; i<cr.length; i+=500) {
+        const chunk = cr.slice(i, i+500);
+        const cv = chunk.map((_: any, k: number) => { const b=k*3; return `($${b+1},$${b+2},$${b+3})`; }).join(",");
         await pool.query(
-          `INSERT INTO agg_category_month (month_key,product_type,net_sales) VALUES ${cv}
-           ON CONFLICT (month_key,product_type) DO UPDATE SET net_sales=EXCLUDED.net_sales`,
-          cr.flat()
+          `INSERT INTO agg_category_day (date_key,product_type,net_sales) VALUES ${cv}
+           ON CONFLICT (date_key,product_type) DO UPDATE SET net_sales=EXCLUDED.net_sales`,
+          chunk.flat()
         );
-        out.lignes_categories = cr.length;
       }
+      out.lignes_categories = cr.length;
     }
 
     out.ok = true;

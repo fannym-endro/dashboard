@@ -4,7 +4,6 @@ import { getShopifyToken } from "@/lib/sync-utils";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Cherche les bons noms de colonnes pour new/returning et sessions.
 export async function GET() {
   const token = await getShopifyToken();
   const SHOP = process.env.SHOPIFY_SHOP;
@@ -16,13 +15,14 @@ export async function GET() {
     });
     const j = await res.json();
     const q = j.data?.shopifyqlQuery;
-    return { cols: q?.tableData?.columns?.map((c: any) => c.name), rows: q?.tableData?.rows?.slice(0,3), errs: q?.parseErrors };
+    return { cols: q?.tableData?.columns?.map((c: any) => c.name), n: q?.tableData?.rows?.length, sample: q?.tableData?.rows?.slice(0,2), errs: q?.parseErrors };
   };
   const out: any = {};
-  out.a = await run("FROM sales SHOW net_sales GROUP BY returning_customer_type SINCE 2025-11-01 UNTIL 2025-11-30");
-  out.b = await run("FROM sales SHOW net_sales GROUP BY customer_returning_status SINCE 2025-11-01 UNTIL 2025-11-30");
-  out.c = await run("FROM sessions SHOW sessions GROUP BY day SINCE 2025-11-01 UNTIL 2025-11-03");
-  out.d = await run("FROM sessions SHOW sessions, conversion_rate GROUP BY day SINCE 2025-11-01 UNTIL 2025-11-03");
-  out.e = await run("FROM sales SHOW net_sales GROUP BY product_type SINCE 2025-11-01 UNTIL 2025-11-30 ORDER BY net_sales DESC LIMIT 10");
+  // Produits par JOUR (au lieu de mois)
+  out.prod_day = await run("FROM sales SHOW net_sales, net_items_sold GROUP BY product_title, day SINCE 2025-11-01 UNTIL 2025-11-02 ORDER BY net_sales DESC LIMIT 5");
+  // Catégories par jour
+  out.cat_day = await run("FROM sales SHOW net_sales GROUP BY product_type, day SINCE 2025-11-01 UNTIL 2025-11-02");
+  // Taux de commandes avec promo : voir si un champ discount existe au niveau commande
+  out.promo = await run("FROM sales SHOW orders, ordered_item_quantity GROUP BY day SINCE 2025-11-01 UNTIL 2025-11-02");
   return NextResponse.json(out);
 }
