@@ -75,9 +75,9 @@ export async function GET(req: Request) {
     }
 
     // 4. Catégories par mois
-    const cat = await ql(`FROM sales SHOW net_sales GROUP BY product_type, day SINCE ${from} UNTIL ${to}`);
+    const cat = await ql(`FROM sales SHOW net_sales GROUP BY product_collection, day SINCE ${from} UNTIL ${to}`);
     if (cat.length) {
-      const cr = cat.filter((r: any) => r.product_type).map((r: any) => [r.day, r.product_type, num(r.net_sales)]);
+      const cr = cat.filter((r: any) => r.product_collection).map((r: any) => [r.day, r.product_collection, num(r.net_sales)]);
       for (let i=0; i<cr.length; i+=500) {
         const chunk = cr.slice(i, i+500);
         const cv = chunk.map((_: any, k: number) => { const b=k*3; return `($${b+1},$${b+2},$${b+3})`; }).join(",");

@@ -18,10 +18,12 @@ export async function GET() {
     return { cols: q?.tableData?.columns?.map((c: any) => c.name), n: q?.tableData?.rows?.length, sample: q?.tableData?.rows?.slice(0,4), errs: q?.parseErrors };
   };
   const out: any = {};
+  // Différents noms possibles pour "collection" dans ShopifyQL
   out.collection = await run("FROM sales SHOW net_sales GROUP BY collection SINCE 2025-11-01 UNTIL 2025-11-30 ORDER BY net_sales DESC LIMIT 5");
   out.collections = await run("FROM sales SHOW net_sales GROUP BY collections SINCE 2025-11-01 UNTIL 2025-11-30 ORDER BY net_sales DESC LIMIT 5");
   out.product_collection = await run("FROM sales SHOW net_sales GROUP BY product_collection SINCE 2025-11-01 UNTIL 2025-11-30 ORDER BY net_sales DESC LIMIT 5");
   out.collection_title = await run("FROM sales SHOW net_sales GROUP BY collection_title SINCE 2025-11-01 UNTIL 2025-11-30 ORDER BY net_sales DESC LIMIT 5");
+  // Aussi : product_vendor et variant, au cas où
   out.product_vendor = await run("FROM sales SHOW net_sales GROUP BY product_vendor SINCE 2025-11-01 UNTIL 2025-11-30 ORDER BY net_sales DESC LIMIT 5");
   return NextResponse.json(out);
 }

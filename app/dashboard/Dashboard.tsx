@@ -225,8 +225,11 @@ function Ecommerce({ data }: any) {
         ["title", "Produit"], ["units", "Unités", num], ["ca_ht", "CA HT", eur],
       ]} /></Card>
 
-      <SectionTitle>CA par catégorie</SectionTitle>
-      <Card><Table rows={data?.byCategory ?? []} cols={[["categorie", "Catégorie"], ["ca_ht", "CA net", eur]]} /></Card>
+      <SectionTitle>CA par collection</SectionTitle>
+      <Card><Table rows={data?.byCategory ?? []} cols={[["categorie", "Collection"], ["ca_ht", "CA net", eur]]} /></Card>
+      <p style={{ fontSize: 12, color: "#b8b4ac", marginTop: 8, fontStyle: "italic" }}>
+        Un produit peut appartenir à plusieurs collections : le total par collection peut donc dépasser le CA global.
+      </p>
     </>
   );
 }
