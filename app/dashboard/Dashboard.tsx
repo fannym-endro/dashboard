@@ -229,12 +229,12 @@ function Ecommerce({ data }: any) {
         <Kpi label="Retours" value={eur(c.returns)} cmp={data?.cmp?.returns} />
       </div>
 
-      <SectionTitle>Top 40 produits par CA</SectionTitle>
+      <SectionTitle>Top 100 produits par CA</SectionTitle>
       <Card><Table rows={data?.topByCa ?? []} cols={[
         ["title", "Produit"], ["categorie", "Catégorie"], ["ca_ht", "CA HT", eur], ["units", "Unités", num],
       ]} /></Card>
 
-      <SectionTitle>Top 40 produits par unités</SectionTitle>
+      <SectionTitle>Top 100 produits par unités</SectionTitle>
       <Card><Table rows={data?.topByUnits ?? []} cols={[
         ["title", "Produit"], ["units", "Unités", num], ["ca_ht", "CA HT", eur],
       ]} /></Card>
@@ -321,6 +321,7 @@ function Table({ rows, cols }: { rows: any[]; cols: any[] }) {
   const [sortKey, setSortKey] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [filter, setFilter] = useState("");
+  const [visible, setVisible] = useState(10);
 
   if (!rows || rows.length === 0)
     return <div style={{ color: "#9a968e", fontSize: 14 }}>Aucune donnée sur la période.</div>;
@@ -351,6 +352,8 @@ function Table({ rows, cols }: { rows: any[]; cols: any[] }) {
     if (sortKey === i) setSortDir(sortDir === "asc" ? "desc" : "asc");
     else { setSortKey(i); setSortDir("desc"); }
   }
+  const shown = view.slice(0, visible);
+  const restant = view.length - shown.length;
 
   return (
     <div>
@@ -369,7 +372,7 @@ function Table({ rows, cols }: { rows: any[]; cols: any[] }) {
           </tr>
         </thead>
         <tbody>
-          {view.map((r: any, ri: number) => (
+          {shown.map((r: any, ri: number) => (
             <tr key={ri} style={{ borderBottom: "1px solid #f0ede7" }}>
               {cols.map((col: any, ci: number) => {
                 const [key, , fmt, compute] = col;
@@ -386,6 +389,13 @@ function Table({ rows, cols }: { rows: any[]; cols: any[] }) {
           ))}
         </tbody>
       </table>
+      {restant > 0 && (
+        <button onClick={() => setVisible(visible + 10)}
+          style={{ marginTop: 12, padding: "8px 16px", borderRadius: 6, border: `1.5px solid ${BRAND}`,
+            background: "#fff", color: BRAND, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+          Voir plus (+{Math.min(10, restant)}) · {shown.length}/{view.length}
+        </button>
+      )}
     </div>
   );
 }
