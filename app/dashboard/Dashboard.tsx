@@ -220,13 +220,13 @@ function Ecommerce({ data }: any) {
   return (
     <>
       <div style={grid(4)}>
-        <Kpi label="CA total" value={eur(c.ca)} />
-        <Kpi label="CA net" value={eur(c.net)} />
-        <Kpi label="Commandes" value={num(c.orders)} />
-        <Kpi label="Sessions" value={num(c.sessions)} />
-        <Kpi label="Taux conversion" value={c.cvr != null ? Number(c.cvr).toFixed(2) + " %" : "—"} />
-        <Kpi label="Remises" value={eur(c.discounts)} />
-        <Kpi label="Retours" value={eur(c.returns)} />
+        <Kpi label="CA total" value={eur(c.ca)} cmp={data?.cmp?.ca} />
+        <Kpi label="CA net" value={eur(c.net)} cmp={data?.cmp?.net} />
+        <Kpi label="Commandes" value={num(c.orders)} cmp={data?.cmp?.orders} />
+        <Kpi label="Sessions" value={num(c.sessions)} cmp={data?.cmp?.sessions} />
+        <Kpi label="Taux conversion" value={c.cvr != null ? Number(c.cvr).toFixed(2) + " %" : "—"} cmp={data?.cmp?.cvr} />
+        <Kpi label="Remises" value={eur(c.discounts)} cmp={data?.cmp?.discounts} />
+        <Kpi label="Retours" value={eur(c.returns)} cmp={data?.cmp?.returns} />
       </div>
 
       <SectionTitle>Top 40 produits par CA</SectionTitle>
@@ -254,14 +254,14 @@ function Meta({ data }: any) {
   return (
     <>
       <div style={grid(4)}>
-        <Kpi label="Dépenses" value={eur(t.spend)} />
-        <Kpi label="ROAS" value={t.roas ?? "—"} />
-        <Kpi label="CA attribué" value={eur(t.pv)} />
-        <Kpi label="Conversions" value={num(t.purchases)} />
-        <Kpi label="CPA" value={eur(t.cpa, 2)} />
-        <Kpi label="CPM" value={eur(t.cpm, 2)} />
-        <Kpi label="CTR" value={pct(t.ctr)} />
-        <Kpi label="CPC" value={eur(t.cpc, 2)} />
+        <Kpi label="Dépenses" value={eur(t.spend)} cmp={data?.cmp?.spend} />
+        <Kpi label="ROAS" value={t.roas ?? "—"} cmp={data?.cmp?.roas} />
+        <Kpi label="CA attribué" value={eur(t.pv)} cmp={data?.cmp?.pv} />
+        <Kpi label="Conversions" value={num(t.purchases)} cmp={data?.cmp?.purchases} />
+        <Kpi label="CPA" value={eur(t.cpa, 2)} cmp={data?.cmp?.cpa} />
+        <Kpi label="CPM" value={eur(t.cpm, 2)} cmp={data?.cmp?.cpm} />
+        <Kpi label="CTR" value={pct(t.ctr)} cmp={data?.cmp?.ctr} />
+        <Kpi label="CPC" value={eur(t.cpc, 2)} cmp={data?.cmp?.cpc} />
       </div>
 
       <SectionTitle>Par campagne</SectionTitle>
@@ -291,13 +291,13 @@ function Klaviyo({ data }: any) {
   return (
     <>
       <div style={grid(4)}>
-        <Kpi label="Emails reçus" value={num(t.received)} />
-        <Kpi label="Taux ouverture" value={pct(t.or)} />
-        <Kpi label="Taux clic" value={pct(t.ctr)} />
-        <Kpi label="CTOR" value={pct(t.ctor)} />
-        <Kpi label="CA attribué" value={eur(t.revenue)} />
-        <Kpi label="RPE" value={eur(t.rpe, 3)} hint="CA / email reçu" />
-        <Kpi label="Commandes email" value={num(t.placed)} />
+        <Kpi label="Emails reçus" value={num(t.received)} cmp={data?.cmp?.received} />
+        <Kpi label="Taux ouverture" value={pct(t.or)} cmp={data?.cmp?.or} />
+        <Kpi label="Taux clic" value={pct(t.ctr)} cmp={data?.cmp?.ctr} />
+        <Kpi label="CTOR" value={pct(t.ctor)} cmp={data?.cmp?.ctor} />
+        <Kpi label="CA attribué" value={eur(t.revenue)} cmp={data?.cmp?.revenue} />
+        <Kpi label="RPE" value={eur(t.rpe, 3)} hint="CA / email reçu" cmp={data?.cmp?.rpe} />
+        <Kpi label="Commandes email" value={num(t.placed)} cmp={data?.cmp?.placed} />
       </div>
 
       <SectionTitle>Performance par flow</SectionTitle>
