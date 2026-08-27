@@ -4,6 +4,48 @@ import { pool } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+async function runShopifyQL(shop: string, token: string, query: string) {
+  const res = await fetch(
+    `https://${shop}/admin/api/2025-10/graphql.json`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": token,
+      },
+      body: JSON.stringify({
+        query: `
+          {
+            shopifyqlQuery(query: "${query.replace(/\n/g, " ").replace(/"/g, '\\"')}") {
+              tableData {
+                columns { name }
+                rows
+              }
+              parseErrors
+            }
+          }
+        `,
+      }),
+    }
+  );
+
+  const json = await res.json();
+  const table = json?.data?.shopifyqlQuery?.tableData;
+  const parseErrors = json?.data?.shopifyqlQuery?.parseErrors ?? null;
+
+  let parsed: any = null;
+  if (table && table.rows?.length > 0) {
+    const columns = table.columns.map((c: any) => c.name);
+    const row = table.rows[0];
+    parsed = {};
+    columns.forEach((col: string, i: number) => {
+      parsed[col] = row[i];
+    });
+  }
+
+  return { raw: json, parsed, parseErrors };
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date");
@@ -16,55 +58,34 @@ export async function GET(req: Request) {
 
   try {
     const token = await getShopifyToken();
-    const shop = process.env.SHOPIFY_SHOP;
+    const shop = process.env.SHOPIFY_SHOP as string;
 
-    const query = `
+    const salesQuery = `
       FROM sales
-      SHOW total_sales, orders, average_order_value, sessions, conversion_rate
+      SHOW total_sales, orders, average_order_value
       SINCE ${date}
       UNTIL ${date}
     `;
 
-    const res = await fetch(
-      `https://${shop}/admin/api/2025-10/graphql.json`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Shopify-Access-Token": token,
-        },
-        body: JSON.stringify({
-          query: `
-            {
-              shopifyqlQuery(query: "${query.replace(/\n/g, " ").replace(/"/g, '\\"')}") {
-                tableData {
-                  columns { name }
-                  rows
-                }
-                parseErrors
-              }
-            }
-          `,
-        }),
-      }
-    );
+    const sessionsQuery = `
+      FROM sessions
+      SHOW sessions, conversion_rate
+      SINCE ${date}
+      UNTIL ${date}
+    `;
 
-    const json = await res.json();
-    out.shopifyql_raw = json;
+    const salesResult = await runShopifyQL(shop, token, salesQuery);
+    const sessionsResult = await runShopifyQL(shop, token, sessionsQuery);
 
-    const table = json?.data?.shopifyqlQuery?.tableData;
-    if (table && table.rows?.length > 0) {
-      const columns = table.columns.map((c: any) => c.name);
-      const row = table.rows[0];
-      const direct: any = {};
-      columns.forEach((col: string, i: number) => {
-        direct[col] = row[i];
-      });
-      out.shopifyql_direct = direct;
-    } else {
-      out.shopifyql_direct = null;
-      out.shopifyql_parse_errors = json?.data?.shopifyqlQuery?.parseErrors ?? null;
-    }
+    out.sales_raw = salesResult.raw;
+    out.sessions_raw = sessionsResult.raw;
+    out.sales_parse_errors = salesResult.parseErrors;
+    out.sessions_parse_errors = sessionsResult.parseErrors;
+
+    out.shopifyql_direct = {
+      ...(salesResult.parsed ?? {}),
+      ...(sessionsResult.parsed ?? {}),
+    };
 
     const dbRes = await pool.query(
       `SELECT * FROM agg_daily WHERE date_key = $1`,
