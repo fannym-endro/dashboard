@@ -1,25 +1,59 @@
 import { NextResponse } from "next/server";
-import { getShopifyToken } from "@/lib/sync-utils";
-import { pool } from "@/lib/db";
-export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const date = url.searchParams.get("date") ?? new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-  const SHOP = process.env.SHOPIFY_SHOP;
-  const out: any = { date };
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  const apiKey = process.env.KLAVIYO_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ error: "KLAVIYO_API_KEY manquant" }, { status: 500 });
+  }
+
+  const out: any = {};
+  const all: any[] = [];
+  let url = "https://a.klaviyo.com/api/metrics/?page[size]=100";
+  let pages = 0;
+
   try {
-    const token = await getShopifyToken();
-    const q = `FROM sales SHOW total_sales, orders, net_sales GROUP BY day SINCE ${date} UNTIL ${date}`;
-    const res = await fetch(`https://${SHOP}/admin/api/2025-10/graphql.json`, {
-      method: "POST", headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
-      body: JSON.stringify({ query: `query { shopifyqlQuery(query: ${JSON.stringify(q)}) { tableData { rows } parseErrors } }` }),
-    });
-    const j = await res.json();
-    out.shopifyql_direct = j.data?.shopifyqlQuery?.tableData?.rows ?? j.data?.shopifyqlQuery?.parseErrors ?? j.errors;
-    const stored = await pool.query(`SELECT total_sales, orders, net_sales FROM agg_daily WHERE date_key=$1`, [date]);
-    out.en_base = stored.rows[0] ?? "absent";
-  } catch (e: any) { out.error = String(e?.message ?? e); }
-  return NextResponse.json(out);
+    while (url && pages < 20) {
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Klaviyo-API-Key ${apiKey}`,
+          revision: "2024-10-15",
+          accept: "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        return NextResponse.json(
+          { error: `Erreur Klaviyo ${res.status}`, detail: text },
+          { status: 500 }
+        );
+      }
+
+      const json = await res.json();
+      const items = json.data || [];
+      for (const item of items) {
+        all.push({
+          id: item.id,
+          name: item.attributes?.name,
+          category: item.attributes?.integration?.category,
+        });
+      }
+
+      url = json.links?.next || null;
+      pages++;
+    }
+
+    out.total_metriques = all.length;
+    out.pages_parcourues = pages;
+    out.email = all.filter((m: any) => m.category === "email");
+    out.sms = all.filter((m: any) => m.category === "sms");
+    out.autres = all.filter((m: any) => m.category !== "email" && m.category !== "sms");
+    out.toutes = all;
+
+    return NextResponse.json(out);
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || String(err) }, { status: 500 });
+  }
 }
