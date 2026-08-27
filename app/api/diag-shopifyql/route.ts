@@ -1,59 +1,55 @@
 import { NextResponse } from "next/server";
+import { getShopifyToken } from "@/lib/sync-utils";
+import { pool } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const apiKey = process.env.KLAVIYO_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "KLAVIYO_API_KEY manquant" }, { status: 500 });
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const date = searchParams.get("date");
+
+  if (!date) {
+    return NextResponse.json({ error: "Paramètre ?date=YYYY-MM-DD requis" }, { status: 400 });
   }
 
-  const out: any = {};
-  const all: any[] = [];
-  let url = "https://a.klaviyo.com/api/metrics/?page[size]=100";
-  let pages = 0;
+  const out: any = { date };
 
   try {
-    while (url && pages < 20) {
-      const res = await fetch(url, {
+    // 1. Interroger ShopifyQL en direct pour cette date précise
+    const token = await getShopifyToken();
+    const shop = process.env.SHOPIFY_SHOP;
+
+    const query = `
+      FROM sales
+      SHOW total_sales, orders, average_order_value, sessions, conversion_rate
+      SINCE ${date}
+      UNTIL ${date}
+    `;
+
+    const res = await fetch(
+      `https://${shop}/admin/api/2025-10/graphql.json`,
+      {
+        method: "POST",
         headers: {
-          Authorization: `Klaviyo-API-Key ${apiKey}`,
-          revision: "2024-10-15",
-          accept: "application/json",
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": token,
         },
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        return NextResponse.json(
-          { error: `Erreur Klaviyo ${res.status}`, detail: text },
-          { status: 500 }
-        );
+        body: JSON.stringify({
+          query: `
+            {
+              shopifyqlQuery(query: "${query.replace(/\n/g, " ").replace(/"/g, '\\"')}") {
+                ... on TableResponse {
+                  tableData {
+                    rowData
+                    columns { name }
+                  }
+                }
+                parseErrors { message }
+              }
+            }
+          `,
+        }),
       }
+    );
 
-      const json = await res.json();
-      const items = json.data || [];
-      for (const item of items) {
-        all.push({
-          id: item.id,
-          name: item.attributes?.name,
-          category: item.attributes?.integration?.category,
-        });
-      }
-
-      url = json.links?.next || null;
-      pages++;
-    }
-
-    out.total_metriques = all.length;
-    out.pages_parcourues = pages;
-    out.email = all.filter((m: any) => m.category === "email");
-    out.sms = all.filter((m: any) => m.category === "sms");
-    out.autres = all.filter((m: any) => m.category !== "email" && m.category !== "sms");
-    out.toutes = all;
-
-    return NextResponse.json(out);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || String(err) }, { status: 500 });
-  }
-}
+    const json = await res.json();
