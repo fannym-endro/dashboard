@@ -35,12 +35,7 @@ async function runShopifyQL(shop: string, token: string, query: string) {
 
   let parsed: any = null;
   if (table && table.rows?.length > 0) {
-    const columns = table.columns.map((c: any) => c.name);
-    const row = table.rows[0];
-    parsed = {};
-    columns.forEach((col: string, i: number) => {
-      parsed[col] = row[i];
-    });
+    parsed = table.rows[0];
   }
 
   return { raw: json, parsed, parseErrors };
