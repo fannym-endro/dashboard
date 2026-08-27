@@ -10,7 +10,7 @@ export async function GET() {
 
   const out: any = {};
   const all: any[] = [];
-  let url = "https://a.klaviyo.com/api/metrics/?page[size]=100";
+let url = "https://a.klaviyo.com/api/metrics/";
   let pages = 0;
 
   try {
