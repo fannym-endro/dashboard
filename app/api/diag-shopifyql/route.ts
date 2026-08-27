@@ -37,13 +37,11 @@ export async function GET(req: Request) {
           query: `
             {
               shopifyqlQuery(query: "${query.replace(/\n/g, " ").replace(/"/g, '\\"')}") {
-                ... on TableResponse {
-                  tableData {
-                    rowData
-                    columns { name }
-                  }
+                tableData {
+                  columns { name }
+                  rowData
                 }
-                parseErrors { message }
+                parseErrors
               }
             }
           `,
