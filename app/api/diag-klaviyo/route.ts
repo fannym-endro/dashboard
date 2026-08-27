@@ -1,27 +1,59 @@
 import { NextResponse } from "next/server";
+
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
-const KEY = process.env.KLAVIYO_API_KEY;
-const REV = "2024-10-15";
-const h = () => ({ Authorization: `Klaviyo-API-Key ${KEY}`, accept: "application/json", revision: REV, "content-type": "application/json" });
+
 export async function GET() {
+  const apiKey = process.env.KLAVIYO_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ error: "KLAVIYO_API_KEY manquant" }, { status: 500 });
+  }
+
   const out: any = {};
+  const all: any[] = [];
+  let url = "https://a.klaviyo.com/api/metrics/?page[size]=100";
+  let pages = 0;
+
   try {
-    const all: any[] = [];
-    let url: string | null = "https://a.klaviyo.com/api/metrics/";
-    let pages = 0;
     while (url && pages < 20) {
-      const res: any = await fetch(url, { headers: h() });
-      const j: any = await res.json();
-      for (const m of (j.data ?? [])) {
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Klaviyo-API-Key ${apiKey}`,
+          revision: "2024-10-15",
+          accept: "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        return NextResponse.json(
+          { error: `Erreur Klaviyo ${res.status}`, detail: text },
+          { status: 500 }
+        );
+      }
+
+      const json = await res.json();
+      const items = json.data || [];
+      for (const item of items) {
         all.push({
-          id: m.id,
-          name: m.attributes?.name,
-          category: m.attributes?.integration?.category, // ⬅️ ajouté
+          id: item.id,
+          name: item.attributes?.name,
+          category: item.attributes?.integration?.category,
         });
       }
-      url = j.links?.next ?? null;
+
+      url = json.links?.next || null;
       pages++;
     }
+
     out.total_metriques = all.length;
-    out.email = all.filter((m: any) => m.category === "email"); // ⬅️
+    out.pages_parcourues = pages;
+    out.email = all.filter((m: any) => m.category === "email");
+    out.sms = all.filter((m: any) => m.category === "sms");
+    out.autres = all.filter((m: any) => m.category !== "email" && m.category !== "sms");
+    out.toutes = all;
+
+    return NextResponse.json(out);
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || String(err) }, { status: 500 });
+  }
+}
