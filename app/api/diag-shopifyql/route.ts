@@ -15,7 +15,6 @@ export async function GET(req: Request) {
   const out: any = { date };
 
   try {
-    // 1. Interroger ShopifyQL en direct pour cette date précise
     const token = await getShopifyToken();
     const shop = process.env.SHOPIFY_SHOP;
 
@@ -53,3 +52,30 @@ export async function GET(req: Request) {
     );
 
     const json = await res.json();
+    out.shopifyql_raw = json;
+
+    const table = json?.data?.shopifyqlQuery?.tableData;
+    if (table && table.rowData?.length > 0) {
+      const columns = table.columns.map((c: any) => c.name);
+      const row = table.rowData[0];
+      const direct: any = {};
+      columns.forEach((col: string, i: number) => {
+        direct[col] = row[i];
+      });
+      out.shopifyql_direct = direct;
+    } else {
+      out.shopifyql_direct = null;
+      out.shopifyql_parse_errors = json?.data?.shopifyqlQuery?.parseErrors ?? null;
+    }
+
+    const dbRes = await pool.query(
+      `SELECT * FROM agg_daily WHERE date_key = $1`,
+      [date]
+    );
+    out.en_base = dbRes.rows[0] ?? null;
+
+    return NextResponse.json(out);
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || String(err), stack: err.stack }, { status: 500 });
+  }
+}
