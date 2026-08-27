@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getShopifyToken } from "@/lib/sync-utils";
 import { pool } from "@/lib/db";
 
-
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
@@ -40,7 +39,7 @@ export async function GET(req: Request) {
               shopifyqlQuery(query: "${query.replace(/\n/g, " ").replace(/"/g, '\\"')}") {
                 tableData {
                   columns { name }
-                  rowData
+                  rows
                 }
                 parseErrors
               }
@@ -54,9 +53,9 @@ export async function GET(req: Request) {
     out.shopifyql_raw = json;
 
     const table = json?.data?.shopifyqlQuery?.tableData;
-    if (table && table.rowData?.length > 0) {
+    if (table && table.rows?.length > 0) {
       const columns = table.columns.map((c: any) => c.name);
-      const row = table.rowData[0];
+      const row = table.rows[0];
       const direct: any = {};
       columns.forEach((col: string, i: number) => {
         direct[col] = row[i];
