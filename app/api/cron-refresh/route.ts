@@ -13,7 +13,9 @@ export async function GET(req: Request) {
   const month = new Date().toISOString().slice(0, 7);
 
   try {
-    const res = await fetch(`${base}/api/import-agg?month=${month}`);
+    const res = await fetch(`${base}/api/import-agg?month=${month}`, {
+      cache: "no-store",
+    });
     const text = await res.text();
     let body;
     try {
