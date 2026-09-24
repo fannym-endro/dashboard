@@ -9,24 +9,25 @@ const h = () => ({ Authorization: `Klaviyo-API-Key ${KEY}`, accept: "application
 export async function GET() {
   const out: any = {};
 
-  // 1. Un échantillon de campagnes via l'API campaigns (pour voir la forme des IDs)
-  try {
-    const res = await fetch("https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,'email')&fields[campaign]=name&page[size]=3", { headers: h(), cache: "no-store" });
-    const j = await res.json();
-    out.exemple_campaigns_api = j.data?.map((c: any) => ({ id: c.id, name: c.attributes?.name }));
-  } catch (e: any) { out.err1 = String(e?.message ?? e); }
+  const tryUrl = async (label: string, url: string) => {
+    try {
+      const res = await fetch(url, { headers: h(), cache: "no-store" });
+      const j = await res.json();
+      out[label] = {
+        status: res.status,
+        nb: j.data?.length ?? 0,
+        exemple: j.data?.slice(0, 2)?.map((c: any) => ({ id: c.id, name: c.attributes?.name })),
+        erreurs: j.errors,
+      };
+    } catch (e: any) { out[label] = { erreur: String(e?.message ?? e) }; }
+  };
 
-  // 2. Le reporting avec le nom de campagne demandé directement
-  try {
-    const body = { data: { type: "campaign-values-report", attributes: {
-      timeframe: { key: "last_30_days" },
-      statistics: ["recipients", "conversion_value"],
-      conversion_metric_id: "VKWrzv",
-    } } };
-    const res = await fetch("https://a.klaviyo.com/api/campaign-values-reports/", { method: "POST", headers: h(), body: JSON.stringify(body), cache: "no-store" });
-    const j = await res.json();
-    out.exemple_reporting = j.data?.attributes?.results?.slice(0, 3)?.map((r: any) => r.groupings);
-  } catch (e: any) { out.err2 = String(e?.message ?? e); }
+  // Variante A : filtre email (celle qui échoue peut-être)
+  await tryUrl("A_filtre_email", "https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,'email')&fields[campaign]=name&page[size]=3");
+  // Variante B : sans le fields
+  await tryUrl("B_sans_fields", "https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,'email')&page[size]=3");
+  // Variante C : filtre avec guillemets doubles
+  await tryUrl("C_guillemets_doubles", `https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,"email")&page[size]=3`);
 
   return NextResponse.json(out);
 }
