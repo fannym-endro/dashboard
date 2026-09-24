@@ -8,21 +8,19 @@ const KEY = process.env.KLAVIYO_API_KEY;
 const REV = "2024-10-15";
 const h = () => ({ Authorization: `Klaviyo-API-Key ${KEY}`, accept: "application/json", revision: REV, "content-type": "application/json" });
 
-// Métriques réelles chez Endro
 const METRICS = {
-  orders: "VKWrzv",    // Placed Order (celle qui porte les données)
-  received: "UT3BUG",  // Received Email
-  opened: "Xiuy3N",    // Opened Email
-  clicked: "YywDh4",   // Clicked Email
+  orders: "VKWrzv",
+  received: "UT3BUG",
+  opened: "Xiuy3N",
+  clicked: "YywDh4",
 };
 
-// Interroge une métrique en agrégat journalier, renvoie {date: {count, value}}
 async function fetchMetric(id: string, from: string, to: string, withValue: boolean) {
   const measurements = withValue ? ["count", "sum_value"] : ["count"];
   const body = { data: { type: "metric-aggregate", attributes: {
     metric_id: id, measurements, interval: "day",
     filter: [`greater-or-equal(datetime,${from}T00:00:00)`, `less-than(datetime,${to}T00:00:00)`],
-    timezone: "Europe/Paris",
+    timezone: "UTC",
   } } };
   const res = await fetch("https://a.klaviyo.com/api/metric-aggregates/", { method: "POST", headers: h(), body: JSON.stringify(body), cache: "no-store" });
   const j = await res.json();
@@ -38,13 +36,11 @@ async function fetchMetric(id: string, from: string, to: string, withValue: bool
   return out;
 }
 
-// ?month=YYYY-MM (défaut : mois en cours)
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const base = url.searchParams.get("month") ?? new Date().toISOString().slice(0, 7);
   const [y, m] = base.split("-").map(Number);
   const from = `${base}-01`;
-  // borne = premier jour du mois suivant
   const next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
   const out: any = { mois: base };
 
@@ -62,6 +58,8 @@ export async function GET(req: Request) {
 
     const rows: any[] = [];
     for (const d of allDates) {
+      // ne garder que les dates du mois demandé (évite les débordements de bornes)
+      if (!d.startsWith(base)) continue;
       rows.push([
         d,
         received[d]?.count ?? 0,
