@@ -40,14 +40,18 @@ async function campaignNames(): Promise<Record<string, string>> {
 
 async function flowNames(): Promise<Record<string, string>> {
   const names: Record<string, string> = {};
-  let url: string | null = "https://a.klaviyo.com/api/flows/?fields[flow]=name";
-  let pages = 0;
-  while (url && pages < 100) {
-    const res: any = await fetch(url, { headers: h(), cache: "no-store" });
-    const j: any = await res.json();
-    for (const f of (j.data ?? [])) names[f.id] = f.attributes?.name ?? f.id;
-    url = j.links?.next ?? null;
-    pages++;
+  // On récupère les flows actifs ET archivés
+  for (const archived of ["false", "true"]) {
+    let url: string | null = `https://a.klaviyo.com/api/flows/?fields[flow]=name&filter=equals(archived,${archived})`;
+    let pages = 0;
+    while (url && pages < 100) {
+      const res: any = await fetch(url, { headers: h(), cache: "no-store" });
+      const j: any = await res.json();
+      for (const f of (j.data ?? [])) names[f.id] = f.attributes?.name ?? f.id;
+      url = j.links?.next ?? null;
+      pages++;
+      await new Promise((r) => setTimeout(r, 300)); // petite pause anti-throttle
+    }
   }
   return names;
 }
