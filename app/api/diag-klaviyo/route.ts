@@ -1,59 +1,43 @@
 import { NextResponse } from "next/server";
-
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
+const KEY = process.env.KLAVIYO_API_KEY;
+const REV = "2024-10-15";
+const h = () => ({ Authorization: `Klaviyo-API-Key ${KEY}`, accept: "application/json", revision: REV, "content-type": "application/json" });
+
+// Teste plusieurs métriques candidates sur une même période récente,
+// et renvoie pour chacune le total d'événements + le CA cumulé.
 export async function GET() {
-  const apiKey = process.env.KLAVIYO_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "KLAVIYO_API_KEY manquant" }, { status: 500 });
-  }
-
   const out: any = {};
-  const all: any[] = [];
-let url = "https://a.klaviyo.com/api/metrics/";
-  let pages = 0;
+  const candidates: Record<string, string> = {
+    "Placed Order (TfEK2x)": "TfEK2x",
+    "Placed Order (VKWrzv)": "VKWrzv",
+    "Ordered Product (WnXuc8)": "WnXuc8",
+    "Received Email (UT3BUG)": "UT3BUG",
+    "Opened Email (Xiuy3N)": "Xiuy3N",
+    "Clicked Email (YywDh4)": "YywDh4",
+  };
 
-  try {
-    while (url && pages < 20) {
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Klaviyo-API-Key ${apiKey}`,
-          revision: "2024-10-15",
-          accept: "application/json",
-        },
-      });
+  const test = async (id: string) => {
+    const body = { data: { type: "metric-aggregate", attributes: {
+      metric_id: id,
+      measurements: ["count", "sum_value"],
+      interval: "day",
+      filter: ["greater-or-equal(datetime,2026-08-01T00:00:00)", "less-than(datetime,2026-08-08T00:00:00)"],
+      timezone: "Europe/Paris",
+    } } };
+    const res = await fetch("https://a.klaviyo.com/api/metric-aggregates/", { method: "POST", headers: h(), body: JSON.stringify(body) });
+    const j = await res.json();
+    const m = j.data?.attributes?.data?.[0]?.measurements;
+    if (!m) return { erreur: j.errors ?? "pas de données" };
+    const count = (m.count ?? []).reduce((a: number, b: number) => a + b, 0);
+    const value = (m.sum_value ?? []).reduce((a: number, b: number) => a + b, 0);
+    return { total_evenements: count, ca_cumule: Math.round(value) };
+  };
 
-      if (!res.ok) {
-        const text = await res.text();
-        return NextResponse.json(
-          { error: `Erreur Klaviyo ${res.status}`, detail: text },
-          { status: 500 }
-        );
-      }
-
-      const json = await res.json();
-      const items = json.data || [];
-      for (const item of items) {
-        all.push({
-          id: item.id,
-          name: item.attributes?.name,
-          category: item.attributes?.integration?.category,
-        });
-      }
-
-      url = json.links?.next || null;
-      pages++;
-    }
-
-    out.total_metriques = all.length;
-    out.pages_parcourues = pages;
-    out.email = all.filter((m: any) => m.category === "email");
-    out.sms = all.filter((m: any) => m.category === "sms");
-    out.autres = all.filter((m: any) => m.category !== "email" && m.category !== "sms");
-    out.toutes = all;
-
-    return NextResponse.json(out);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || String(err) }, { status: 500 });
+  for (const [name, id] of Object.entries(candidates)) {
+    try { out[name] = await test(id); } catch (e: any) { out[name] = { erreur: String(e?.message ?? e) }; }
   }
+  return NextResponse.json(out);
 }
