@@ -25,7 +25,7 @@ async function report(kind: "campaign" | "flow", timeframeKey: string) {
 async function campaignNames(): Promise<Record<string, string>> {
   const names: Record<string, string> = {};
   for (const channel of ["email", "sms"]) {
-    let url: string | null = `https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,'${channel}')&fields[campaign]=name&page[size]=100`;
+    let url: string | null = `https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,'${channel}')&fields[campaign]=name`;
     let pages = 0;
     while (url && pages < 100) {
       const res: any = await fetch(url, { headers: h(), cache: "no-store" });
@@ -40,7 +40,7 @@ async function campaignNames(): Promise<Record<string, string>> {
 
 async function flowNames(): Promise<Record<string, string>> {
   const names: Record<string, string> = {};
-  let url: string | null = "https://a.klaviyo.com/api/flows/?fields[flow]=name&page[size]=50";
+  let url: string | null = "https://a.klaviyo.com/api/flows/?fields[flow]=name";
   let pages = 0;
   while (url && pages < 100) {
     const res: any = await fetch(url, { headers: h(), cache: "no-store" });
