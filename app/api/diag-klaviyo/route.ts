@@ -9,31 +9,24 @@ const h = () => ({ Authorization: `Klaviyo-API-Key ${KEY}`, accept: "application
 export async function GET() {
   const out: any = {};
 
+  // 1. Un échantillon de campagnes via l'API campaigns (pour voir la forme des IDs)
   try {
-    const body = {
-      data: { type: "campaign-values-report", attributes: {
-        timeframe: { key: "last_30_days" },
-        statistics: ["recipients", "open_rate", "click_rate", "conversion_value", "opens_unique", "clicks_unique"],
-        conversion_metric_id: "VKWrzv",
-      } }
-    };
+    const res = await fetch("https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,'email')&fields[campaign]=name&page[size]=3", { headers: h(), cache: "no-store" });
+    const j = await res.json();
+    out.exemple_campaigns_api = j.data?.map((c: any) => ({ id: c.id, name: c.attributes?.name }));
+  } catch (e: any) { out.err1 = String(e?.message ?? e); }
+
+  // 2. Le reporting avec le nom de campagne demandé directement
+  try {
+    const body = { data: { type: "campaign-values-report", attributes: {
+      timeframe: { key: "last_30_days" },
+      statistics: ["recipients", "conversion_value"],
+      conversion_metric_id: "VKWrzv",
+    } } };
     const res = await fetch("https://a.klaviyo.com/api/campaign-values-reports/", { method: "POST", headers: h(), body: JSON.stringify(body), cache: "no-store" });
     const j = await res.json();
-    out.campagnes = { status: res.status, echantillon: j.data?.attributes?.results?.slice(0, 2), erreurs: j.errors };
-  } catch (e: any) { out.campagnes = { erreur: String(e?.message ?? e) }; }
-
-  try {
-    const body = {
-      data: { type: "flow-values-report", attributes: {
-        timeframe: { key: "last_30_days" },
-        statistics: ["recipients", "open_rate", "click_rate", "conversion_value", "opens_unique", "clicks_unique"],
-        conversion_metric_id: "VKWrzv",
-      } }
-    };
-    const res = await fetch("https://a.klaviyo.com/api/flow-values-reports/", { method: "POST", headers: h(), body: JSON.stringify(body), cache: "no-store" });
-    const j = await res.json();
-    out.flows = { status: res.status, echantillon: j.data?.attributes?.results?.slice(0, 2), erreurs: j.errors };
-  } catch (e: any) { out.flows = { erreur: String(e?.message ?? e) }; }
+    out.exemple_reporting = j.data?.attributes?.results?.slice(0, 3)?.map((r: any) => r.groupings);
+  } catch (e: any) { out.err2 = String(e?.message ?? e); }
 
   return NextResponse.json(out);
 }
