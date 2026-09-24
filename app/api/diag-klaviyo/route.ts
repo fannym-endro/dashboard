@@ -9,19 +9,27 @@ const h = () => ({ Authorization: `Klaviyo-API-Key ${KEY}`, accept: "application
 export async function GET() {
   const out: any = {};
 
-  // Test A : reporting flow SANS conversion_metric (groupé nativement par flow)
+  // Reporting flow sur AOUT 2026 (même période que ton fichier CSV), avec les vrais IDs
   try {
     const body = { data: { type: "flow-values-report", attributes: {
-      timeframe: { key: "last_30_days" },
-      statistics: ["recipients"],
+      timeframe: { start: "2026-08-01T00:00:00+00:00", end: "2026-09-01T00:00:00+00:00" },
+      statistics: ["recipients", "conversion_value"],
+      conversion_metric_id: "VKWrzv",
     } } };
     const res = await fetch("https://a.klaviyo.com/api/flow-values-reports/", { method: "POST", headers: h(), body: JSON.stringify(body), cache: "no-store" });
     const j = await res.json();
-    const results = (j.data?.attributes?.results ?? [])
-      .sort((a: any, b: any) => (b.statistics?.recipients ?? 0) - (a.statistics?.recipients ?? 0))
-      .slice(0, 5);
-    out.test_A = { status: res.status, exemples: results.map((r: any) => ({ groupings: r.groupings, recipients: r.statistics?.recipients })), erreurs: j.errors };
-  } catch (e: any) { out.test_A = { erreur: String(e?.message ?? e) }; }
+    // On regroupe par flow_id en sommant les messages, puis on trie
+    const agg: Record<string, number> = {};
+    for (const r of (j.data?.attributes?.results ?? [])) {
+      const fid = r.groupings?.flow_id;
+      if (fid) agg[fid] = (agg[fid] ?? 0) + (r.statistics?.recipients ?? 0);
+    }
+    const top = Object.entries(agg).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    out.top_flows = top.map(([id, recv]) => ({ flow_id: id, recipients: recv }));
+    out.exemple_groupings = j.data?.attributes?.results?.[0]?.groupings;
+    out.status = res.status;
+    out.erreurs = j.errors;
+  } catch (e: any) { out.erreur = String(e?.message ?? e); }
 
   return NextResponse.json(out);
 }
