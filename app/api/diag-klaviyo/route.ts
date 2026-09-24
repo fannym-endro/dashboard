@@ -8,26 +8,30 @@ const h = () => ({ Authorization: `Klaviyo-API-Key ${KEY}`, accept: "application
 
 export async function GET() {
   const out: any = {};
+  const ids = ["Ui2J6N", "VTrX2s", "Y8Hw8M", "RqivuM", "VpfLh4"];
 
-  const tryUrl = async (label: string, url: string) => {
+  // Récupérer chaque flow par son id directement
+  for (const id of ids) {
     try {
-      const res = await fetch(url, { headers: h(), cache: "no-store" });
+      const res = await fetch(`https://a.klaviyo.com/api/flows/${id}/?fields[flow]=name,status,archived`, { headers: h(), cache: "no-store" });
       const j = await res.json();
-      out[label] = {
-        status: res.status,
-        nb: j.data?.length ?? 0,
-        exemple: j.data?.slice(0, 2)?.map((c: any) => ({ id: c.id, name: c.attributes?.name })),
-        erreurs: j.errors,
-      };
-    } catch (e: any) { out[label] = { erreur: String(e?.message ?? e) }; }
-  };
+      out[id] = j.data ? { name: j.data.attributes?.name, status: j.data.attributes?.status, archived: j.data.attributes?.archived } : { erreur: j.errors };
+    } catch (e: any) { out[id] = { erreur: String(e?.message ?? e) }; }
+  }
 
-  // Variante A : filtre email (celle qui échoue peut-être)
-  await tryUrl("A_filtre_email", "https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,'email')&fields[campaign]=name&page[size]=3");
-  // Variante B : sans le fields
-  await tryUrl("B_sans_fields", "https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,'email')&page[size]=3");
-  // Variante C : filtre avec guillemets doubles
-  await tryUrl("C_guillemets_doubles", `https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,"email")&page[size]=3`);
+  // Combien de flows au total renvoie la liste ?
+  try {
+    let count = 0, url: string | null = "https://a.klaviyo.com/api/flows/?fields[flow]=name";
+    let pages = 0;
+    while (url && pages < 100) {
+      const res: any = await fetch(url, { headers: h(), cache: "no-store" });
+      const j: any = await res.json();
+      count += (j.data ?? []).length;
+      url = j.links?.next ?? null;
+      pages++;
+    }
+    out.total_flows_listes = count;
+  } catch (e: any) { out.total_err = String(e?.message ?? e); }
 
   return NextResponse.json(out);
 }
