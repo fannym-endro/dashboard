@@ -137,13 +137,13 @@ export async function getMeta({ from, to }: Range) {
 
 // ---------- KLAVIYO ----------
 async function klavRaw({ from, to }: Range) {
-  const rows = await q(
-    `SELECT metric, COUNT(*) n, COALESCE(SUM(revenue_ht),0) rev
-     FROM fct_email_events WHERE date_key BETWEEN $1 AND $2 GROUP BY metric`, [from, to]);
-  const get = (m: string) => Number(rows.find((r: any) => r.metric === m)?.n ?? 0);
-  const received = get("Received Email"), opened = get("Opened Email"),
-        clicked = get("Clicked Email"), placed = get("Placed Order");
-  const rev = rows.reduce((s: number, r: any) => s + Number(r.rev), 0);
+  const [row] = await q(
+    `SELECT COALESCE(SUM(received),0) received, COALESCE(SUM(opened),0) opened,
+            COALESCE(SUM(clicked),0) clicked, COALESCE(SUM(orders),0) placed,
+            COALESCE(SUM(revenue),0) revenue
+     FROM agg_klaviyo_day WHERE date_key BETWEEN $1 AND $2`, [from, to]);
+  const received = Number(row.received), opened = Number(row.opened),
+        clicked = Number(row.clicked), placed = Number(row.placed), rev = Number(row.revenue);
   return { received, opened, clicked, placed, revenue: rev,
     or: received > 0 ? +(100 * opened / received).toFixed(1) : 0,
     ctr: received > 0 ? +(100 * clicked / received).toFixed(1) : 0,
@@ -156,15 +156,17 @@ export async function getKlaviyo({ from, to }: Range) {
   const [tot, prev, yoy] = await Promise.all([
     klavRaw({ from, to }), klavRaw(shift(from, to, -n)), klavRaw(shift(from, to, -365)),
   ]);
-  const byMetric = await q(
-    `SELECT metric, COUNT(*) n, COALESCE(SUM(revenue_ht),0) rev
-     FROM fct_email_events WHERE date_key BETWEEN $1 AND $2 GROUP BY metric ORDER BY n DESC`, [from, to]);
-  const byFlow = await q(
-    `SELECT COALESCE(flow_name,'(campagne)') flow_name,
-            COUNT(*) FILTER (WHERE metric='Placed Order') orders, COALESCE(SUM(revenue_ht),0) rev
-     FROM fct_email_events WHERE date_key BETWEEN $1 AND $2
-     GROUP BY flow_name ORDER BY rev DESC LIMIT 15`, [from, to]);
+  const campaigns = await q(
+    `SELECT name, recipients, opens_unique, clicks_unique,
+            ROUND(open_rate*100,1) open_rate, ROUND(click_rate*100,1) click_rate, revenue
+     FROM agg_klaviyo_campaign WHERE recipients > 0
+     ORDER BY revenue DESC LIMIT 100`);
+  const flows = await q(
+    `SELECT name, recipients, opens_unique, clicks_unique,
+            ROUND(open_rate*100,1) open_rate, ROUND(click_rate*100,1) click_rate, revenue
+     FROM agg_klaviyo_flow WHERE recipients > 0
+     ORDER BY revenue DESC LIMIT 100`);
   return { totals: { ...tot, or: tot.or || null, ctr: tot.ctr || null, ctor: tot.ctor || null, rpe: tot.rpe || null },
-    byMetric, byFlow,
+    campaigns, flows,
     cmp: makeCmp(tot, prev, yoy, ["received", "opened", "clicked", "placed", "revenue", "or", "ctr", "ctor", "rpe"]) };
 }
