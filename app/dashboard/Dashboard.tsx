@@ -292,25 +292,32 @@ function Klaviyo({ data }: any) {
     <>
       <div style={grid(4)}>
         <Kpi label="Emails reçus" value={num(t.received)} cmp={data?.cmp?.received} />
+        <Kpi label="Emails ouverts" value={num(t.opened)} cmp={data?.cmp?.opened} />
+        <Kpi label="Emails cliqués" value={num(t.clicked)} cmp={data?.cmp?.clicked} />
         <Kpi label="Taux ouverture" value={pct(t.or)} cmp={data?.cmp?.or} />
         <Kpi label="Taux clic" value={pct(t.ctr)} cmp={data?.cmp?.ctr} />
-        <Kpi label="CTOR" value={pct(t.ctor)} cmp={data?.cmp?.ctor} />
+        <Kpi label="CTOR" value={pct(t.ctor)} cmp={data?.cmp?.ctor} hint="clics / ouvertures" />
         <Kpi label="CA attribué" value={eur(t.revenue)} cmp={data?.cmp?.revenue} />
-        <Kpi label="RPE" value={eur(t.rpe, 3)} hint="CA / email reçu" cmp={data?.cmp?.rpe} />
         <Kpi label="Commandes email" value={num(t.placed)} cmp={data?.cmp?.placed} />
+        <Kpi label="RPE" value={eur(t.rpe, 3)} hint="CA / email reçu" cmp={data?.cmp?.rpe} />
       </div>
 
-      <SectionTitle>Performance par flow</SectionTitle>
-      <Card><Table rows={data?.byFlow ?? []} cols={[
-        ["flow_name", "Flow"], ["orders", "Commandes", num], ["rev", "CA attr.", eur],
+      <SectionTitle>Performance par campagne</SectionTitle>
+      <Card><Table rows={data?.campaigns ?? []} cols={[
+        ["name", "Campagne"], ["recipients", "Destinataires", num],
+        ["open_rate", "Taux ouv.", pct], ["click_rate", "Taux clic", pct],
+        ["revenue", "CA attr.", eur],
       ]} /></Card>
 
-      <SectionTitle>Détail par évènement</SectionTitle>
-      <Card><Table rows={data?.byMetric ?? []} cols={[
-        ["metric", "Évènement"], ["n", "Volume", num], ["rev", "CA", eur],
+      <SectionTitle>Performance par flow</SectionTitle>
+      <Card><Table rows={data?.flows ?? []} cols={[
+        ["name", "Flow"], ["recipients", "Destinataires", num],
+        ["open_rate", "Taux ouv.", pct], ["click_rate", "Taux clic", pct],
+        ["revenue", "CA attr.", eur],
       ]} /></Card>
+
       <p style={{ fontSize: 12, color: "#b8b4ac", marginTop: 16, fontStyle: "italic" }}>
-        SMS et WhatsApp : à brancher via Klaviyo SMS / Yotpo.
+        Les cartes du haut suivent la période sélectionnée. Les tableaux campagnes et flows couvrent les 12 derniers mois glissants (limite de l'API Klaviyo) et sont classés par CA attribué. Le CA du détail peut légèrement différer du global, car chaque envoi porte son propre CA selon la fenêtre de conversion Klaviyo.
       </p>
     </>
   );
