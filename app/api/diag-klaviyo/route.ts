@@ -8,30 +8,20 @@ const h = () => ({ Authorization: `Klaviyo-API-Key ${KEY}`, accept: "application
 
 export async function GET() {
   const out: any = {};
-  const ids = ["Ui2J6N", "VTrX2s", "Y8Hw8M", "RqivuM", "VpfLh4"];
 
-  // Récupérer chaque flow par son id directement
-  for (const id of ids) {
-    try {
-      const res = await fetch(`https://a.klaviyo.com/api/flows/${id}/?fields[flow]=name,status,archived`, { headers: h(), cache: "no-store" });
-      const j = await res.json();
-      out[id] = j.data ? { name: j.data.attributes?.name, status: j.data.attributes?.status, archived: j.data.attributes?.archived } : { erreur: j.errors };
-    } catch (e: any) { out[id] = { erreur: String(e?.message ?? e) }; }
-  }
-
-  // Combien de flows au total renvoie la liste ?
+  // Test A : reporting flow SANS conversion_metric (groupé nativement par flow)
   try {
-    let count = 0, url: string | null = "https://a.klaviyo.com/api/flows/?fields[flow]=name";
-    let pages = 0;
-    while (url && pages < 100) {
-      const res: any = await fetch(url, { headers: h(), cache: "no-store" });
-      const j: any = await res.json();
-      count += (j.data ?? []).length;
-      url = j.links?.next ?? null;
-      pages++;
-    }
-    out.total_flows_listes = count;
-  } catch (e: any) { out.total_err = String(e?.message ?? e); }
+    const body = { data: { type: "flow-values-report", attributes: {
+      timeframe: { key: "last_30_days" },
+      statistics: ["recipients"],
+    } } };
+    const res = await fetch("https://a.klaviyo.com/api/flow-values-reports/", { method: "POST", headers: h(), body: JSON.stringify(body), cache: "no-store" });
+    const j = await res.json();
+    const results = (j.data?.attributes?.results ?? [])
+      .sort((a: any, b: any) => (b.statistics?.recipients ?? 0) - (a.statistics?.recipients ?? 0))
+      .slice(0, 5);
+    out.test_A = { status: res.status, exemples: results.map((r: any) => ({ groupings: r.groupings, recipients: r.statistics?.recipients })), erreurs: j.errors };
+  } catch (e: any) { out.test_A = { erreur: String(e?.message ?? e) }; }
 
   return NextResponse.json(out);
 }
