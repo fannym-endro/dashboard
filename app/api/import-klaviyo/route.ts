@@ -39,18 +39,27 @@ async function fetchMetric(id: string, from: string, to: string, withValue: bool
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const base = url.searchParams.get("month") ?? new Date().toISOString().slice(0, 7);
+  const debug = url.searchParams.get("debug");
   const [y, m] = base.split("-").map(Number);
   const from = `${base}-01`;
   const next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
   const out: any = { mois: base };
 
   try {
-    const [orders, received, opened, clicked] = await Promise.all([
-      fetchMetric(METRICS.orders, from, next, true),
-      fetchMetric(METRICS.received, from, next, false),
-      fetchMetric(METRICS.opened, from, next, false),
-      fetchMetric(METRICS.clicked, from, next, false),
-    ]);
+    const orders = await fetchMetric(METRICS.orders, from, next, true);
+    const received = await fetchMetric(METRICS.received, from, next, false);
+    const opened = await fetchMetric(METRICS.opened, from, next, false);
+    const clicked = await fetchMetric(METRICS.clicked, from, next, false);
+
+    if (debug) {
+      const extrait = (o: any) => Object.fromEntries(Object.entries(o).slice(0, 4));
+      return NextResponse.json({
+        orders: extrait(orders),
+        received: extrait(received),
+        opened: extrait(opened),
+        clicked: extrait(clicked),
+      });
+    }
 
     const allDates = new Set<string>([
       ...Object.keys(orders), ...Object.keys(received), ...Object.keys(opened), ...Object.keys(clicked),
@@ -58,7 +67,6 @@ export async function GET(req: Request) {
 
     const rows: any[] = [];
     for (const d of allDates) {
-      // ne garder que les dates du mois demandé (évite les débordements de bornes)
       if (!d.startsWith(base)) continue;
       rows.push([
         d,
