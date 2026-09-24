@@ -10,16 +10,33 @@ const h = () => ({ Authorization: `Klaviyo-API-Key ${KEY}`, accept: "application
 
 const STATS = ["recipients", "opens_unique", "clicks_unique", "conversion_value"];
 
+// Reporting paginé : parcourt toutes les pages en suivant le curseur.
 async function report(kind: "campaign" | "flow", timeframeKey: string) {
-  const body = { data: { type: `${kind}-values-report`, attributes: {
-    timeframe: { key: timeframeKey },
-    statistics: STATS,
-    conversion_metric_id: "VKWrzv",
-  } } };
-  const res = await fetch(`https://a.klaviyo.com/api/${kind}-values-reports/`, { method: "POST", headers: h(), body: JSON.stringify(body), cache: "no-store" });
-  const j = await res.json();
-  if (j.errors) throw new Error(JSON.stringify(j.errors));
-  return j.data?.attributes?.results ?? [];
+  const all: any[] = [];
+  let cursor: string | null = null;
+  let pages = 0;
+  while (pages < 50) {
+    const attributes: any = {
+      timeframe: { key: timeframeKey },
+      statistics: STATS,
+      conversion_metric_id: "VKWrzv",
+    };
+    if (cursor) attributes.page_cursor = cursor;
+    const body = { data: { type: `${kind}-values-report`, attributes } };
+    const res: any = await fetch(`https://a.klaviyo.com/api/${kind}-values-reports/`, { method: "POST", headers: h(), body: JSON.stringify(body), cache: "no-store" });
+    const j: any = await res.json();
+    if (j.errors) throw new Error(JSON.stringify(j.errors));
+    for (const r of (j.data?.attributes?.results ?? [])) all.push(r);
+    const next = j.links?.next;
+    if (next) {
+      cursor = new URL(next).searchParams.get("page[cursor]");
+    } else {
+      break;
+    }
+    pages++;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  return all;
 }
 
 async function campaignNames(): Promise<Record<string, string>> {
@@ -33,6 +50,7 @@ async function campaignNames(): Promise<Record<string, string>> {
       for (const c of (j.data ?? [])) names[c.id] = c.attributes?.name ?? c.id;
       url = j.links?.next ?? null;
       pages++;
+      await new Promise((r) => setTimeout(r, 250));
     }
   }
   return names;
@@ -40,7 +58,6 @@ async function campaignNames(): Promise<Record<string, string>> {
 
 async function flowNames(): Promise<Record<string, string>> {
   const names: Record<string, string> = {};
-  // On récupère les flows actifs ET archivés
   for (const archived of ["false", "true"]) {
     let url: string | null = `https://a.klaviyo.com/api/flows/?fields[flow]=name&filter=equals(archived,${archived})`;
     let pages = 0;
@@ -50,7 +67,7 @@ async function flowNames(): Promise<Record<string, string>> {
       for (const f of (j.data ?? [])) names[f.id] = f.attributes?.name ?? f.id;
       url = j.links?.next ?? null;
       pages++;
-      await new Promise((r) => setTimeout(r, 300)); // petite pause anti-throttle
+      await new Promise((r) => setTimeout(r, 250));
     }
   }
   return names;
@@ -62,20 +79,24 @@ export async function GET(req: Request) {
   const out: any = { timeframe: tf };
 
   try {
-    // --- CAMPAGNES ---
+    // --- CAMPAGNES (regroupées par campaign_id) ---
     const camps = await report("campaign", tf);
     const cNames = await campaignNames();
-    const cRows: any[] = [];
+    const cAgg: Record<string, any> = {};
     for (const r of camps) {
       const id = r.groupings?.campaign_id;
       if (!id) continue;
       const s = r.statistics ?? {};
-      cRows.push([id, cNames[id] ?? id, Math.round(s.recipients ?? 0),
-        Math.round(s.opens_unique ?? 0), Math.round(s.clicks_unique ?? 0),
-        s.recipients ? (s.opens_unique / s.recipients) : 0,
-        s.recipients ? (s.clicks_unique / s.recipients) : 0,
-        Math.round((s.conversion_value ?? 0) * 100) / 100]);
+      if (!cAgg[id]) cAgg[id] = { recipients: 0, opens: 0, clicks: 0, rev: 0 };
+      cAgg[id].recipients += s.recipients ?? 0;
+      cAgg[id].opens += s.opens_unique ?? 0;
+      cAgg[id].clicks += s.clicks_unique ?? 0;
+      cAgg[id].rev += s.conversion_value ?? 0;
     }
+    const cRows = Object.entries(cAgg).map(([id, a]: any) => [
+      id, cNames[id] ?? id, Math.round(a.recipients), Math.round(a.opens), Math.round(a.clicks),
+      a.recipients ? (a.opens / a.recipients) : 0, a.recipients ? (a.clicks / a.recipients) : 0,
+      Math.round(a.rev * 100) / 100]);
     if (cRows.length) {
       const vals = cRows.map((_, i) => { const b = i*8; return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8})`; }).join(",");
       await pool.query(
